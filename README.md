@@ -1,4 +1,6 @@
-dispatch-hawtio
-===============
+# hawtio qpid dispatch router plugin
 
-Monitor qpid dispatch router with hawtio
+## Apache Tomcat installation
+
+Copy the qdr-plugin.war file to the deploy directory of Apache Tomcat os similar Java web container.
+
