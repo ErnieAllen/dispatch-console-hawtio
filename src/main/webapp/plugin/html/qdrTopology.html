@@ -1,0 +1,29 @@
+<div class="row-fluid tertiary left panel">
+    <ul class="nav nav-tabs connected" ng-controller="QDR.TopoTabsController">
+        <li ng-repeat="tab in states" ng-show="isValid(tab)" ng-class='{active : isActive(tab)}' ng-click='setActive(tab)'>
+            <a ng-href="{{hash}}" ng-bind-html-unsafe="tab.content"></a>
+        </li>
+    </ul>
+    <div ng-controller="QDR.TopologyFormController">
+<!--
+        <div ng-repeat="thisForm in forms" simple-form name="formName(thisForm)" data="formData(thisForm)" entity="formEntity(thisForm)" ng-show="isActive(thisForm)"></div>
+-->
+        <table class="table table-condensed table-striped"
+               hawtio-simple-table="topoGridOptions" ng-show="true"></table>
+        <table class="table table-condensed table-striped"
+               hawtio-simple-table="topoGridOptions" ng-show="isCurrent('connections')"></table>
+        <table class="table table-condensed table-striped"
+               hawtio-simple-table="topoGridOptions" ng-show="isCurrent('nodes')"></table>
+
+    </div>
+</div>
+<div class="panel-adjacent canvas" ng-controller="QDR.TopologyController">
+    <!-- <json-formatter json="schema" open="1"></json-formatter> -->
+    <div id="topology">
+        {{update()}}
+    </div>
+
+</div>
+
+
+

@@ -74,11 +74,14 @@ var QDR = (function(QDR) {
   // set up the routing for this plugin
   QDR.module.config(function($routeProvider) {
     $routeProvider
-        .when('/irc/main', {
-          templateUrl: QDR.templatePath + 'irc.html'
+    .when('/irc/main', {
+        templateUrl: QDR.templatePath + 'qdr.html'
+      })
+        .when('/irc/topology', {
+          templateUrl: QDR.templatePath + 'qdrTopology.html'
         })
-        .when('/irc/settings', {
-          templateUrl: QDR.templatePath + 'settings.html'
+        .when('/irc/connect', {
+          templateUrl: QDR.templatePath + 'qdrConnect.html'
         });
   });
 
@@ -89,6 +92,8 @@ var QDR = (function(QDR) {
     QDR.log.info("plugin running");
 
     Core.addCSS('../irc-plugin/plugin/css/plugin.css');
+    Core.addCSS('../irc-plugin/plugin/css/qdrTopology.css');
+    Core.addCSS('../irc-plugin/plugin/css/json-formatter-min.css');
 
     // tell hawtio that we have our own custom layout for
     // our view
@@ -99,10 +104,11 @@ var QDR = (function(QDR) {
       id: "irc",
       content: "Qpid Dispatch Router",
       title: "example QDR client",
-      isValid: function(workspace) { return workspace.treeContainsDomainAndProperties(QDR.jmxDomain, { 'type': QDR.mbeanType }); },
-      href: function() { return "#/irc/main"; },
+      isValid: function(workspace) { return true; },
+      href: function() { return "#/irc/connect"; },
       isActive: function() { return workspace.isLinkActive("irc"); }
     });
+    
     QDRService.initProton();
     var settings = angular.fromJson(localStorage[QDR.SETTINGS_KEY]);
     if (settings && settings.autostart) {
@@ -125,3 +131,5 @@ hawtioPluginLoader.addModule(QDR.pluginName);
 
 // have to add this third-party directive too
 hawtioPluginLoader.addModule('luegg.directives');
+hawtioPluginLoader.addModule('jsonFormatter');
+

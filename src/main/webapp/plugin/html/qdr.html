@@ -4,12 +4,6 @@
       <div class="channel-window-inner">
         <ul class="zebra-list">
           <li ng-repeat="entity in entities">{{entity}}</li>
-          <!--
-          <li ng-repeat="(channel, obj) in channels | orderBy:sortChannel" ng-class="isSelectedChannel(channel)" ng-click="selectChannel(channel)">
-            {{channel}} <i class="icon-remove red pull-right" title="Click to part" ng-click="partChannel(channel)"></i>
-          </li>
-
-          -->
         </ul>
       </div>
     </div>
@@ -19,34 +13,12 @@
     </div>
   </div>
   <div class="span8">
-    <div ng-hide="hasTopic()" class="topic-window">
+      <div ng-hide="hasTopic()" class="topic-window">
       {{selectedChannelObject.topic.topic}}
     </div>
     <div class="main-window" ng-class="hasTopic()" scroll-glue>
       <div class="main-window-inner">
         <ul class="zebra-list">
-          <li ng-repeat="message in selectedChannelObject.messages track by $index">
-            <div ng-switch="message.type">
-              <div ng-switch-when="reply">
-                {{message.timestamp | date : 'mediumTime'}} {{message.value}} {{message.message}}
-              </div>
-              <div ng-switch-when="notice">
-                {{message.timestamp | date : 'mediumTime'}} &lt;{{message.user.nick}}&gt; {{message.message}}
-              </div>
-              <div ng-switch-when="privmsg">
-                {{message.timestamp | date : 'mediumTime'}} &lt;{{message.user.nick}}&gt; {{message.message}}
-              </div>
-              <div ng-switch-when="join">
-                {{message.timestamp | date : 'mediumTime'}} {{message.user.nick}} has joined {{message.chan}}
-              </div>
-              <div ng-switch-when="part">
-                {{message.timestamp | date : 'mediumTime'}} {{message.user.nick}} has left {{message.chan}} <span ng-show="message.message"> - {{message.message}}</span>
-              </div>
-              <div ng-switch-default>
-                {{message.timestamp | date : 'mediumTime'}} {{message}}
-              </div>
-            </div>
-          </li>
         </ul>
       </div>
     </div>

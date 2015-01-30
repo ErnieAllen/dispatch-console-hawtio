@@ -15,17 +15,22 @@ var QDR = (function (QDR) {
     {
       content: '<i class="icon-comments"></i> Main',
       title: "Connect to Router",
-      isValid: function (QDRService) { return QDRService.isConnected(); },
+      isValid: function (QDRService) { return false; }, //QDRService.isConnected(); },
       href: "#/irc/main"
     },
     {
-      content: '<i class="icon-cogs"></i> Settings',
-      title: "Connect to a router",
-      isValid: function (QDRService) { return true; },
-      href: "#/irc/settings"
-    }
+        content: '<i class="icon-cogs"></i> Connect',
+        title: "Connect to a router",
+        isValid: function (QDRService) { return true; },
+        href: "#/irc/connect"
+    },
+    {
+        content: '<i class="icon-star-empty"></i> Topology',
+        title: "View router network topology",
+        isValid: function (QDRService) { return QDRService.isConnected(); },
+        href: "#/irc/topology"
+      }
   ];
-
   /**
    * @function NavBarController
    *
@@ -37,8 +42,14 @@ var QDR = (function (QDR) {
    */
   QDR.NavBarController = function($scope, QDRService, $location) {
 
-    if ($location.path().startsWith("/irc/main") && !QDRService.isConnected()) {
-      $location.path("/irc/settings");
+    if (($location.path().startsWith("/irc/main") || $location.path().startsWith("/irc/topology") )
+    && !QDRService.isConnected()) {
+      $location.path("/irc/connect");
+    }
+
+    if (($location.path().startsWith("/irc/main") || $location.path().startsWith("/irc/connect") )
+    && QDRService.isConnected()) {
+      $location.path("/irc/topology");
     }
 
     $scope.breadcrumbs = QDR.breadcrumbs;
@@ -47,6 +58,9 @@ var QDR = (function (QDR) {
       return link.isValid(QDRService);
     };
 
+    $scope.isActive = function(href) {
+        return href.split("#")[1] == $location.path();
+    };
   };
 
   return QDR;

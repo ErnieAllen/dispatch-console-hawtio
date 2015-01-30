@@ -13,7 +13,8 @@ var QDR = (function (QDR) {
   QDR.SettingsController = function($scope, QDRService, localStorage, $location) {
 
     $scope.connecting = false;
-
+    $scope.connectionError = false;
+    $scope.connectionErrorText = undefined;
     $scope.forms = {};
 
     $scope.formEntity = angular.fromJson(localStorage[QDR.SETTINGS_KEY]) || {};
@@ -63,15 +64,26 @@ var QDR = (function (QDR) {
       }
     };
 
+    
     $scope.connect = function() {
       if ($scope.forms.settings.$valid) {
+        $scope.connectionError = false;
         $scope.connecting = true;
-        QDRService.addConnectAction(function() {
-          console.log("got connection notification");
+        console.log("attempting to connect");
+        QDRService.addDisconnectAction(function() {
+          QDR.log.debug("disconnect action called");
           $scope.connecting = false;
-          if ($location.path().startsWith("/irc/settings")){
-            console.log("we were on settings page. let's switch to main page now that we are connected");
-            $location.path("/irc/main");
+          $scope.connectionErrorText = QDRService.errorText;
+          $scope.connectionError = true;
+        });
+        QDRService.addConnectAction(function() {
+          QDR.log.debug("got connection notification");
+          $scope.connecting = false;
+          if ($location.path().startsWith("/irc/connect")){
+            //console.log("we were on connect page. let's switch to topo now that we are connected");
+            //QDR.log.debug("location before the connect " + $location.path());
+            $location.path("/irc/topology");
+            //QDR.log.debug("location after the connect " + $location.path());
           }
         });
         QDRService.connect($scope.formEntity);
