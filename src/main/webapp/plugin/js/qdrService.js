@@ -1,19 +1,38 @@
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+  or more contributor license agreements.  See the NOTICE file
+  distributed with this work for additional information
+  regarding copyright ownership.  The ASF licenses this file
+  to you under the Apache License, Version 2.0 (the
+  "License"); you may not use this file except in compliance
+  with the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing,
+  software distributed under the License is distributed on an
+  "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  KIND, either express or implied.  See the License for the
+  specific language governing permissions and limitations
+  under the License.
+*/
 /**
  * @module QDR
  */
 var QDR = (function(QDR) {
 
-  QDR.SERVER = 'Server Messages';
-
   // The QDR service handles the connection to
   // the server in the background
-  QDR.module.factory("QDRService", function($rootScope, $http, $resource) {
+  QDR.module.factory("QDRService", ['$rootScope', '$http', '$resource', '$location', function($rootScope, $http, $resource, $location) {
     var self = {
+
+	  rhea: require("rhea"),
 
       timeout: 10,
       connectActions: [],
       disconnectActions: [],
-      updatedActions: [],
+      updatedActions: {},
+      stop: undefined,  // update interval handle
 
       addConnectAction: function(action) {
         if (angular.isFunction(action)) {
@@ -25,10 +44,14 @@ var QDR = (function(QDR) {
           self.disconnectActions.push(action);
         }
       },
-      addUpdatedAction: function(action) {
+      addUpdatedAction: function(key, action) {
         if (angular.isFunction(action)) {
-          self.updatedActions.push(action);
+            self.updatedActions[key] = action;
         }
+      },
+      delUpdatedAction: function(key) {
+        if (key in self.updatedActions)
+            delete self.updatedActions[key];
       },
 
       executeConnectActions: function() {
@@ -45,30 +68,28 @@ var QDR = (function(QDR) {
         self.disconnectActions = [];
       },
       executeUpdatedActions: function() {
-        self.updatedActions.forEach(function(action) {
-          action.apply();
-        });
-        self.updatedActions = [];
+        for (action in self.updatedActions) {
+            self.updatedActions[action].apply();
+        }
       },
 
       notifyTopologyDone: function() {
         //QDR.log.debug("got Toplogy done notice");
 
+        if (!angular.isDefined(self.schema))
+            return;
+        else if (self.topology._gettingTopo)
+            return;
         if (!self.gotTopology) {
-            //QDR.log.debug("topology was just initialized");
+            QDR.log.debug("topology was just initialized");
             self.gotTopology = true;
             self.executeConnectActions();
-            Core.$apply($rootScope);
+            $rootScope.$apply();
         } else {
-            //QDR.log.debug("topology model was just updated");
+            QDR.log.debug("topology model was just updated");
             self.executeUpdatedActions();
         }
 
-      },
-      channels: {
-        'Server Messages': {
-          messages: []
-        }
       },
       /**
        * @property options
@@ -82,21 +103,20 @@ var QDR = (function(QDR) {
        * The proton message that is used to send commands
        * and receive responses
        */
-      messenger: undefined,
-      msgReceived: undefined,
-      msgSend: undefined,
-      address: undefined,
+		sender: undefined,
+		receiver: undefined,
+		sendable: false,
+
       schema: undefined,
 
-      replyTo: undefined,
-      subscription: undefined,
-      subscribed: false,
+      toAddress: undefined,
+      connected: false,
       gotTopology: false,
-      localNode: undefined,
       errorText: undefined,
+	  connectionError: undefined,
 
       isConnected: function() {
-        return self.gotTopology;
+        return self.connected;
       },
 
     correlator: {
@@ -104,96 +124,55 @@ var QDR = (function(QDR) {
         _corremationID: 0,
 
         corr: function () {
-            return (++this._corremationID + "");
-        },
-        add: function(id) {
-            //QDR.log.debug("correlator:add id="+id);
-            this._objects[id] = {resolver: null};
+            var id = ++this._corremationID + "";
+			this._objects[id] = {resolver: null}
+            return id;
         },
         request: function() {
             //QDR.log.debug("correlator:request");
             return this;
         },
-        then: function(id, resolver) {
+        then: function(id, resolver, error) {
             //QDR.log.debug("registered then resolver for correlationID: " + id);
+			if (error) {
+	            delete this._objects[id];
+				return;
+			}
             this._objects[id].resolver = resolver;
         },
-        resolve: function() {
-            var statusCode = self.msgReceived.properties['statusCode'];
-            if (typeof statusCode === "undefined") {
-                //QDR.log.debug("correlator:resolve:statusCode was not 200 (OK) but was undefined. Waiting.");
-                return;
-            }
-
-            var correlationID = self.msgReceived.getCorrelationID();
-            //QDR.log.debug("message received: ");
-            //console.dump(msgReceived.body);
-            this._objects[correlationID].resolver(self.msgReceived.body);
+        // called by receiver's on('message') handler when a response arrives
+        resolve: function(context) {
+			var correlationID = context.message.properties.correlation_id;
+            this._objects[correlationID].resolver(context.message.body);
             delete this._objects[correlationID];
         }
     },
-
+    
     onSubscription: function() {
-        //setInterval( function () { self.topology.get() }, 1000);
         self.getSchema();
         self.topology.get();
      },
 
-    pumpData: function() {
-         //QDR.log.debug("pumpData called");
-	     if (!self.subscribed) {
-	     	 var subscriptionAddress = self.subscription.getAddress();
-	         if (subscriptionAddress) {
-      	     	self.replyTo = subscriptionAddress;
-	            self.subscribed = true;
-	            var splitAddress = subscriptionAddress.split('/');
-	            splitAddress.pop();
-	            self.localNode = splitAddress.join('/') + "/$management";
-                //QDR.log.debug("we are subscribed. replyTo is " + self.replyTo + " localNode is " + self.localNode);
-
-	            self.onSubscription();
-	         }
-	     }
-
-	     while (self.messenger.incoming()) {
-	         // The second parameter forces Binary payloads to be decoded as strings
-	         // this is useful because the broker QMF Agent encodes strings as AMQP
-	         // binary, which is a right pain from an interoperability perspective.
-             self.msgReceived.clear();;
-	         var t = self.messenger.get(self.msgReceived, true);
-	 		 //QDR.log.debug("pumpData incoming t was " + t);
-	         self.correlator.resolve();
-	         self.messenger.accept(t);
-	         self.messenger.settle(t);
-	         //msgReceived.free();
-	         //delete msgReceived;
-	     }
-
-	     if (self.messenger.isStopped()) {
-			 QDR.log.debug("command completed and messenger stopped");
-	     }
-	 },
+    startUpdating: function () {
+        QDR.log.info("startUpdating called")
+        self.stopUpdating();
+        self.topology.get();
+        self.stop = setInterval(function() {
+            self.topology.get();
+        }, 2000);
+    },
+    stopUpdating: function () {
+        if (angular.isDefined(self.stop)) {
+            QDR.log.info("stoptUpdating called")
+            clearInterval(self.stop);
+            self.stop = undefined;
+        }
+    },
 
       initProton: function() {
         //QDR.log.debug("*************QDR init proton called ************");
-        self.messenger = new proton.Messenger();
-        self.msgReceived = new proton.Message();
-        self.msgSend = new proton.Message();
-        self.messenger.on('error', function(error) {
-          self.errorText = error;
-          QDR.log.error("Got error from messenger: " + error);
-          self.executeDisconnectActions();
-        });
-        self.messenger.on('work', self.pumpData);
-        self.messenger.setOutgoingWindow(1024);
-        self.messenger.start();
       },
       cleanUp: function() {
-        if (self.subscribed === true) {
-          self.messenger.stop();
-          self.subscribed = false;
-          //QDR.log.debug("*************QDR closed ************");
-        }
       },
       error: function(line) {
         if (line.num) {
@@ -207,34 +186,111 @@ var QDR = (function(QDR) {
         self.executeDisconnectActions();
       },
 
+      nameFromId: function (id) {
+		return id.split('/')[3];
+      },
+
+      humanify: function (s) {
+          var t = s.charAt(0).toUpperCase() + s.substr(1).replace(/[A-Z]/g, ' $&');
+          return t.replace(".", " ");
+      },
+	  pretty: function(v) {
+    	var formatComma = d3.format(",");
+		if (!isNaN(parseFloat(v)) && isFinite(v))
+			return formatComma(v);
+		return v;
+	  },
+
+      nodeNameList: function() {
+        var nl = [];
+        // if we are in the middel of updating the topology
+        // then use the last known node info
+        var ni = self.topology._nodeInfo;
+        if (self.topology._gettingTopo)
+            ni = self.topology._lastNodeInfo;
+		for (var id in ni) {
+            nl.push(self.nameFromId(id));
+        }
+        return nl.sort();
+      },
+
+      nodeIdList: function() {
+        var nl = [];
+        // if we are in the middel of updating the topology
+        // then use the last known node info
+        var ni = self.topology._nodeInfo;
+        if (self.topology._gettingTopo)
+            ni = self.topology._lastNodeInfo;
+		for (var id in ni) {
+            nl.push(id);
+        }
+        return nl.sort();
+      },
+
+      nodeList: function () {
+        var nl = [];
+        var ni = self.topology._nodeInfo;
+        if (self.topology._gettingTopo)
+            ni = self.topology._lastNodeInfo;
+		for (var id in ni) {
+            nl.push({name: self.nameFromId(id), id: id});
+        }
+        return nl;
+      },
+
+      // given an attribute name array, find the value at the same index in the values array
+      valFor: function (aAr, vAr, key) {
+          var idx = aAr.indexOf(key);
+          if ((idx > -1) && (idx < vAr.length)) {
+              return vAr[idx];
+          }
+          return null;
+      },
+
       /*
-       *
        * send the management messages that build up the topology
        *
        *
        */
       topology: {
         _gettingTopo: false,
-        _expectedCount: 0,
         _nodeInfo: {},
-        _expected: [],
+        _lastNodeInfo: {},
+        _expected: {},
         _timerHandle: null,
-        _ticks: 0,
+
+        nodeInfo: function () {
+            return this._gettingTopo ? this._lastNodeInfo : this._nodeInfo;
+        },
 
         get: function () {
             if (this._gettingTopo)
                 return;
-            if (!self.subscribed)
+            if (!self.connected) {
+				QDR.log.debug("topology get failed because !self.connected")
                 return;
-            this._expectedCount = 0;
+            }
+            this._lastNodeInfo = angular.copy(this._nodeInfo);
             this._gettingTopo = true;
+
             self.errorText = undefined;
             this.cleanUp(this._nodeInfo);
             this._nodeInfo = {};
-            this._expected = [];
+            this._expected = {};
 
-            self.makeMgmtCalls(self.localNode);
-            self.getRemoteNodeInfo();
+            // get the list of nodes to query.
+            // once this completes, we will get the info for each node returned
+            self.getRemoteNodeInfo( function (response) {
+                //QDR.log.debug("got remote node list of ");
+                //console.dump(response);
+                if( Object.prototype.toString.call( response ) === '[object Array]' ) {
+                    // we expect a response for each of these nodes
+                    self.topology.wait(self.timeout);
+                    for (var i=0; i<response.length; ++i) {
+                        self.makeMgmtCalls(response[i]);
+                    }
+                };
+            });
         },
 
         cleanUp: function (obj) {
@@ -246,11 +302,10 @@ var QDR = (function(QDR) {
                     this.cleanUp(obj[o]);
             }
 */
-            delete obj;
+            if (obj)
+                delete obj;
         },
-        setExpectedCount: function (count, timeout) {
-            this._expectedCount = count;
-            this._ticks = 0;
+        wait: function (timeout) {
             this.timerHandle = setTimeout(this.timedOut, timeout * 1000);
          },
         timedOut: function () {
@@ -276,66 +331,96 @@ var QDR = (function(QDR) {
             var gotKeys = {};
             for (var id in this._nodeInfo) {
                 var onode = this._nodeInfo[id];
+                var conn = onode['.connection'];
                 // get list of node names in the connection data
-                var connectionResults = onode['.connection'].results;
-                for (var j=0; j < connectionResults.length; ++j) {
-                    var roleIndex = onode['.connection'].attributeNames.indexOf('role');
-                    var containerIndex = onode['.connection'].attributeNames.indexOf('container');
-
-                    if (connectionResults[j][roleIndex] == "inter-router")
-                        gotKeys[connectionResults[j][containerIndex]] = ""; // just add the key
+                if (conn) {
+                    var containerIndex = conn.attributeNames.indexOf('container');
+                    var connectionResults = conn.results;
+                    if (containerIndex >= 0)
+                        for (var j=0; j < connectionResults.length; ++j) {
+                            // inter-router connection to a valid dispatch connection name
+                            gotKeys[connectionResults[j][containerIndex]] = ""; // just add the key
+                        }
                 }
             }
             // gotKeys now contains all the container names that we have received
-            return (
-                // one node responded and it doesn't connect to any other node (of course)
-                (Object.keys(gotKeys).length == 0 && Object.keys(this._nodeInfo).length == 1) ||
-                // the number of nodes that responded is the same as the referenced nodes
-                (Object.keys(gotKeys).length == Object.keys(this._nodeInfo).length));
+            // Are any of the keys that are still expected in the gotKeys list?
+            var keys = Object.keys(gotKeys);
+            for (var id in this._expected) {
+                var key = self.nameFromId(id);
+                if (key in keys)
+                    return false;
+            }
+            return true;
         },
             
         addNodeInfo: function (id, entity, values) {
+            // save the results in the nodeInfo object
             if (id) {
-                if (!this._nodeInfo.hasOwnProperty(id)) {
-                    this._nodeInfo[id] = {};
+                if (!(id in self.topology._nodeInfo)) {
+                    self.topology._nodeInfo[id] = {};
                 }
-                this._nodeInfo[id][entity] = values;
+                self.topology._nodeInfo[id][entity] = values;
             }
-            if (this._expectedCount == Object.keys(this._nodeInfo).length) {
-                for (var id in this._nodeInfo) {
-                    if (!this._nodeInfo[id].hasOwnProperty(".router") || !this._nodeInfo[id].hasOwnProperty(".connection"))
-                        return;
+  
+            // remove the id / entity from _expected
+            if (id in self.topology._expected) {
+                var entities = self.topology._expected[id];
+                var idx = entities.indexOf(entity);
+                if (idx > -1) {
+                    entities.splice(idx, 1);
+                    if (entities.length == 0)
+                        delete self.topology._expected[id];
                 }
-                this.ondone();
             }
+            // see if the expected obj is empty
+            if (Object.getOwnPropertyNames(self.topology._expected).length == 0)
+                self.topology.ondone();
+            self.topology.cleanUp(values);
         },
-        expect: function (id, key1, key2) {
-            var expObj = {};
-            expObj[id] = [key1, key2];
-            this._expected.push(expObj);
+        expect: function (id, key) {
+            if (!key || !id)
+                return;
+            if (!(id in this._expected))
+                this._expected[id] = [];
+            if (this._expected[id].indexOf(key) == -1)
+                this._expected[id].push(key);
         },
 /*
-        {
-            ".router": {
-                "results": [
-                    [4, "router/QDR.X", 1, "0", 3, 60, 60, 9, "QDR.X", 30, "interior", "org.apache.qpid.dispatch.router", 3, 8, "router/QDR.X"]
-                ],
-                "attributeNames": ["raIntervalFlux", "name", "helloInterval", "area", "helloMaxAge", "mobileAddrMaxAge", "remoteLsMaxAge", "addrCount", "routerId", "raInterval", "mode", "type", "nodeCount", "linkCount", "identity"]
-            },
-            ".connection": {
-                "results": [
-                    ["QDR.A", "connection/0.0.0.0:20001", "operational", "0.0.0.0:20001", "inter-router", "connection/0.0.0.0:20001", "ANONYMOUS", "org.apache.qpid.dispatch.connection", "out"],
-                    ["1429f141-9a06-4242-c47d-cb385dc3d86a", "connection/localhost:40738", "operational", "localhost:40738", "normal", "connection/localhost:40738", "ANONYMOUS", "org.apache.qpid.dispatch.connection", "in"]
-                ],
-                "attributeNames": ["container", "name", "state", "host", "role", "identity", "sasl", "type", "dir"]
-            }
-        }
-*/
+The response looks like:
+{
+    ".router": {
+        "results": [
+            [4, "router/QDR.X", 1, "0", 3, 60, 60, 11, "QDR.X", 30, "interior", "org.apache.qpid.dispatch.router", 5, 12, "router/QDR.X"]
+        ],
+        "attributeNames": ["raIntervalFlux", "name", "helloInterval", "area", "helloMaxAge", "mobileAddrMaxAge", "remoteLsMaxAge", "addrCount", "routerId", "raInterval", "mode", "type", "nodeCount", "linkCount", "identity"]
+    },
+    ".connection": {
+        "results": [
+            ["QDR.B", "connection/0.0.0.0:20002", "operational", "0.0.0.0:20002", "inter-router", "connection/0.0.0.0:20002", "ANONYMOUS", "org.apache.qpid.dispatch.connection", "out"],
+            ["QDR.A", "connection/0.0.0.0:20001", "operational", "0.0.0.0:20001", "inter-router", "connection/0.0.0.0:20001", "ANONYMOUS", "org.apache.qpid.dispatch.connection", "out"],
+            ["b2de2f8c-ef4a-4415-9a23-000c2f86e85d", "connection/localhost:33669", "operational", "localhost:33669", "normal", "connection/localhost:33669", "ANONYMOUS", "org.apache.qpid.dispatch.connection", "in"]
+        ],
+        "attributeNames": ["container", "name", "state", "host", "role", "identity", "sasl", "type", "dir"]
+    },
+    ".router.node": {
+        "results": [
+            ["QDR.A", null],
+            ["QDR.B", null],
+            ["QDR.C", "QDR.A"],
+            ["QDR.D", "QDR.A"],
+            ["QDR.Y", "QDR.A"]
+        ],
+        "attributeNames": ["routerId", "nextHop"]
+    }
+}*/
         ondone: function () {
             clearTimeout(this.timerHandle);
             this._gettingTopo = false;
             //this.miniDump();
+            //this.dump();
             self.notifyTopologyDone();
+
          },
          dump: function (prefix) {
             if (prefix)
@@ -346,7 +431,7 @@ var QDR = (function(QDR) {
                 console.dump(this._nodeInfo[key]);
                 QDR.log.debug("---");
             }
-            QDR.log.debug("was expecting " + this._expectedCount);
+            QDR.log.debug("was still expecting:");
             console.dump(this._expected);
         },
          miniDump: function (prefix) {
@@ -365,162 +450,273 @@ var QDR = (function(QDR) {
 
       },
 
-      getRemoteNodeInfo: function () {
+      getRemoteNodeInfo: function (callback) {
 	 	//QDR.log.debug("getRemoteNodeInfo called");
-        var id;
+        var ret;
         // first get the list of remote node names
 	 	self.correlator.request(
-                id = self.sendMgmtNodesQuery()
-            ).then(id, function(response) {
-                //QDR.log.debug("got remote node list of ");
-                //console.dump(response);
-                if( Object.prototype.toString.call( response ) === '[object Array]' ) {
-                    // we expect a response for each of these nodes + the node we are connected to
-                    self.topology.setExpectedCount(response.length + 1, self.timeout);
-                    if (response.length == 0) {
-                        // there is only one node or the router network is unstable
-                        QDR.log.debug("got empty list from get-mgmt-nodes call");
-                        // make this call to trigger the done state
-                        self.topology.addNodeInfo(null);
-                    }
-                    for (var i=0; i<response.length; ++i) {
-                        self.makeMgmtCalls(response[i]);
-                    }
-                };
+                ret = self.sendMgmtQuery('GET-MGMT-NODES')
+            ).then(ret.id, function(response) {
+                callback(response);
                 self.topology.cleanUp(response);
-            });
+            }, ret.error);
       },
 
       makeMgmtCalls: function (id) {
-            self.topology.expect(id, ".router", ".connection");
-            self.getNodeInfo(id, ".router");
-            self.getNodeInfo(id, ".connection");
+            var keys = [".router", ".connection", ".container", ".router.node", ".listener", ".router.link"];
+            $.each(keys, function (i, key) {
+                self.topology.expect(id, key);
+                self.getNodeInfo(id, key, [], self.topology.addNodeInfo);
+            });
       },
 
-      getNodeInfo: function (nodeName, entity) {
+      getNodeInfo: function (nodeName, entity, attrs, callback) {
         //QDR.log.debug("getNodeInfo called with nodeName: " + nodeName + " and entity " + entity);
-        var id;
+        var ret;
         self.correlator.request(
-            id = self.sendQuery(nodeName, entity)
-        ).then(id, function(response) {
-            self.topology.addNodeInfo(nodeName, entity, response);
-            self.topology.cleanUp(response);
-        });
+            ret = self.sendQuery(nodeName, entity, attrs)
+        ).then(ret.id, function(response) {
+            callback(nodeName, entity, response);
+            //self.topology.addNodeInfo(nodeName, entity, response);
+            //self.topology.cleanUp(response);
+        }, ret.error);
       },
+
+		getMultipleNodeInfo: function (nodeNames, entity, attrs, callback, selectedNodeId) {
+			var responses = {};
+			var gotNodesResult = function (nodeName, dotentity, response) {
+				responses[nodeName] = response;
+				if (Object.keys(responses).length == nodeNames.length) {
+					aggregateNodeInfo(nodeNames, entity, responses, callback);
+				}
+			}
+
+			var aggregateNodeInfo = function (nodeNames, entity, responses, callback) {
+				//QDR.log.debug("got all results for  " + entity);
+				// aggregate the responses
+				var newResponse = {};
+				var thisNode = responses[selectedNodeId];
+				newResponse['attributeNames'] = thisNode.attributeNames;
+				newResponse['results'] = thisNode.results;
+				newResponse['aggregates'] = [];
+				for (var i=0; i<thisNode.results.length; ++i) {
+					var result = thisNode.results[i];
+					var vals = [];
+					result.forEach( function (val) {
+						vals.push({sum: val, detail: []})
+					})
+					newResponse.aggregates.push(vals);
+				}
+				var nameIndex = thisNode.attributeNames.indexOf("name");
+				var ent = self.schema.entityTypes[entity];
+				var ids = Object.keys(responses);
+				ids.sort();
+				ids.forEach( function (id) {
+					var response = responses[id];
+					var results = response.results;
+					results.forEach( function (result) {
+						// find the matching result in the aggregates
+						var found = newResponse.aggregates.some( function (aggregate, j) {
+							if (aggregate[nameIndex].sum === result[nameIndex]) {
+								// result and aggregate are now the same record, add the graphable values
+								newResponse.attributeNames.forEach( function (key, i) {
+									if (ent.attributes[key] && ent.attributes[key].graph) {
+										if (id != selectedNodeId)
+											aggregate[i].sum += result[i];
+										aggregate[i].detail.push({node: self.nameFromId(id)+':', val: result[i]})
+									}
+								})
+								return true; // stop looping
+							}
+							return false; // continute looking for the aggregate record
+						})
+						if (!found) {
+							// this attribute was not found in the aggregates yet
+							// because it was not in the selectedNodeId's results
+							var vals = [];
+							result.forEach( function (val) {
+								vals.push({sum: val, detail: []})
+							})
+							newResponse.aggregates.push(vals)
+						}
+					})
+				})
+				callback(nodeNames, entity, newResponse);
+			}
+
+			nodeNames.forEach( function (id) {
+	            self.getNodeInfo(id, '.'+entity, attrs, gotNodesResult);
+	        })
+			//TODO: implement a timeout in case not all requests complete
+		},
 
       getSchema: function () {
         //QDR.log.debug("getting schema");
-        var id;
+        var ret;
         self.correlator.request(
-            id = self.sendSchemaQuery()
-        ).then(id, function(response) {
+            ret = self.sendMgmtQuery('GET-SCHEMA')
+        ).then(ret.id, function(response) {
             //QDR.log.debug("Got schema response");
-            //console.dump(response);
-            self.schema = angular.copy(response);
-            self.topology.cleanUp(response);
-        });
+			self.schema = response;
+            //self.schema = angular.copy(response);
+            //self.topology.cleanUp(response);
+            self.notifyTopologyDone();
+        }, ret.error);
       },
 
-    sendQuery: function(toAddr, entity) {
-        var correlationID = self.correlator.corr();
-        self.msgSend.clear();
-
-        self.msgSend.setReplyTo(self.replyTo);
-        self.msgSend.setCorrelationID(correlationID);
-        self.msgSend.properties = {
-            "operation": "QUERY",
-            "entityType": "org.apache.qpid.dispatch" + entity,
-            "type": "org.amqp.management",
-            "name": "self",
-        };
-        // remove the amqp: from the beginning of the toAddr
-        // toAddr looks like amqp:/_topo/0/QDR.A/$management
+    sendQuery: function(toAddr, entity, attrs) {
         var toAddrParts = toAddr.split('/');
         if (toAddrParts.shift() != "amqp:") {
             self.topology.error(Error("unexpected format for router address: " + toAddr));
             return;
         }
-        var fullAddr =  self.address + "/" + toAddrParts.join('/');
-        self.msgSend.setAddress(fullAddr);
-        //QDR.log.debug("sendQuery for " + toAddr + " :: address is " + fullAddr);
+        var fullAddr =  self.toAddress + "/" + toAddrParts.join('/');
 
-        self.msgSend.body = {
-            "attributeNames": [],
-         }
+		var body;
+        if (attrs)
+            body = {
+                    "attributeNames": attrs,
+            }
+        else
+            body = {
+                "attributeNames": [],
+            }
 
-        self.correlator.add(correlationID);
-        //QDR.log.debug("message for " + toAddr);
-        //console.dump(message);
-        self.messenger.put(self.msgSend, true);
-        return correlationID;
+		return self._send(body, fullAddr, "QUERY", "org.apache.qpid.dispatch" + entity);
     },
 
-    sendMgmtNodesQuery: function () {
-        //console.log("sendMgmtNodesQuery");
-        var correlationID = self.correlator.corr();
-        self.msgSend.clear();
-
-        self.msgSend.setAddress(self.address + "/$management");
-        self.msgSend.setReplyTo(self.replyTo);
-        self.msgSend.setCorrelationID(correlationID);
-        self.msgSend.properties = {
-            "operation": "GET-MGMT-NODES",
-            "type": "org.amqp.management",
-            "name": "self",
-        };
-
-        self.msgSend.body = [];
-
-        //QDR.log.debug("sendMgmtNodesQuery address is " + self.address + "/$management");
-        //QDR.log.debug("sendMgmtNodesQuery replyTo is " + self.replyTo);
-        self.correlator.add(correlationID);
-        self.messenger.put(self.msgSend, true);
-        return correlationID;
+    sendMgmtQuery: function (operation) {
+		// TODO: file bug against dispatch - We should be able to just pass body: [], but that generates an 'invalid body'
+		return self._send([' '], self.toAddress + "/$management", operation);
     },
 
-    sendSchemaQuery: function () {
-        //console.log("sendMgmtNodesQuery");
-        var correlationID = self.correlator.corr();
-        self.msgSend.clear();
+	_send: function (body, to, operation, entityType) {
+		var ret = {id: self.correlator.corr()};
+		if (!self.sender || !self.sendable) {
+			ret.error = "no sender"
+			return ret;
+		}
+		try {
+			var application_properties = {
+				operation:  operation,
+                type:       "org.amqp.management",
+                name:       "self"
+            };
+			if (entityType)
+                application_properties.entityType = entityType;
 
-        self.msgSend.setAddress(self.address + "/$management");
-        self.msgSend.setReplyTo(self.replyTo);
-        self.msgSend.setCorrelationID(correlationID);
-        self.msgSend.properties = {
-            "operation": "GET-SCHEMA",
-            "type": "org.amqp.management",
-            "name": "self",
-        };
-
-        self.msgSend.body = [];
-
-        //QDR.log.debug("sendMgmtNodesQuery address is " + self.address + "/$management");
-        //QDR.log.debug("sendMgmtNodesQuery replyTo is " + self.replyTo);
-        self.correlator.add(correlationID);
-        self.messenger.put(self.msgSend, true);
-        return correlationID;
-    },
+	        self.sender.send({
+	                body: body,
+	                properties: {
+	                    to:                     to,
+                        reply_to:               self.receiver.remote.attach.source.address,
+	                    correlation_id:         ret.id
+	                },
+	                application_properties: application_properties
+            })
+		}
+		catch (e) {
+			error = "error sending: " + e;
+			QDR.log.error(error)
+			ret.error = error;
+		}
+		return ret;
+	},
 
       disconnect: function() {
+        self.connection.close();
+		self.errorText = "Disconnected."
       },
 
       connect: function(options) {
         self.options = options;
         self.topologyInitialized = false;
-        if (!self.subscribed) {
-            var baseAddress = 'amqp://' + options.address + ':5673';
-            self.address = baseAddress;
-            QDR.log.debug("Subscribing to router: ", baseAddress + "/#");
-            self.subscription = self.messenger.subscribe(baseAddress + "/#");
-            // wait for response messages to come in
-            self.messenger.recv(); // Receive as many messages as messenger can buffer.
-        } else {
-            self.topology.get();
-        }
+		if (!self.connected) {
+			var okay = {connection: false, sender: false, receiver: false}
+            var port = options.port || 5673;
+            var baseAddress = options.address + ':' + port;
+			var ws = self.rhea.websocket_connect(WebSocket);
+			self.toAddress = "amqp://" + baseAddress;
+			self.connectionError = undefined;
+
+			var stop = function (context) {
+				//self.stopUpdating();
+				okay.sender = false;
+				okay.receiver = false;
+				okay.connected = false;
+				self.connected = false;
+				self.sender = null;
+				self.receiver = null;
+				self.sendable = false;
+			}
+
+			var maybeStart = function () {
+				if (okay.connection && okay.sender && okay.receiver && self.sendable && !self.connected) {
+					QDR.log.info("okay to start")
+					self.connected = true;
+					self.connection = connection;
+					self.sender = sender;
+					self.receiver = receiver;
+					self.onSubscription();
+					self.gotTopology = false;
+				}
+			}
+			var onDisconnect = function () {
+				QDR.log.warn("Disconnected");
+				stop();
+				self.executeDisconnectActions();
+			}
+
+			QDR.log.debug("****** calling rhea.connect ********")
+            var connection = self.rhea.connect({
+                    connection_details:ws('ws://' + baseAddress),
+                    reconnect:true,
+                    properties: {console_identifier: 'Dispatch console'}
+            });
+			connection.on('connection_open', function (context) {
+				QDR.log.debug("connection_opened")
+				okay.connection = true;
+				okay.receiver = false;
+				okay.sender = false;
+			})
+			connection.on('disconnected', function (context) {
+				onDisconnect();
+				self.errorText = "Error: Connection failed"
+				self.executeDisconnectActions();
+				self.connectionError = true;
+			})
+			connection.on('connection_close', function (context) {
+				onDisconnect();
+				self.errorText = "Disconnected"
+			})
+
+			var sender = connection.open_sender("/$management");
+			sender.on('sender_open', function (context) {
+				QDR.log.debug("sender_opened")
+				okay.sender = true
+				maybeStart()
+			})
+			sender.on('sendable', function (context) {
+				//QDR.log.debug("sendable")
+				self.sendable = true;
+				maybeStart();
+			})
+
+			var receiver = connection.open_receiver({source: {dynamic: true}});
+			receiver.on('receiver_open', function (context) {
+				QDR.log.debug("receiver_opened")
+				okay.receiver = true;
+				maybeStart()
+			})
+			receiver.on("message", function (context) {
+				self.correlator.resolve(context);
+			});
+
+		}
       }
     }
       return self;
-  });
+  }]);
 
   return QDR;
 }(QDR || {}));
