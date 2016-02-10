@@ -669,7 +669,7 @@ The response looks like:
 
 			QDR.log.debug("****** calling rhea.connect ********")
             var connection = self.rhea.connect({
-                    connection_details:ws('ws://' + baseAddress),
+                    connection_details:ws('ws://' + baseAddress, ["binary", "AMQWSB10"]),
                     reconnect:true,
                     properties: {console_identifier: 'Dispatch console'}
             });
