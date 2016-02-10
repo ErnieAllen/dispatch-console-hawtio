@@ -267,7 +267,7 @@ var QDR = (function(QDR) {
 		var gridCols = [
 			{ field: 'name',
 			  displayName: '',
-			  cellTemplate: '<div class="ngCellText"><span ng-cell-text>{{row.entity.name.value}}</span></div>'
+			  cellTemplate: '<div class="ngCellText"><span ng-cell-text>{{row.entity.name.value | shortName}}</span></div>'
 			}
 		];
 /*

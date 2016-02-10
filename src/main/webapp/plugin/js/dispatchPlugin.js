@@ -101,6 +101,12 @@ var QDR = (function(QDR) {
 			return function (input) {
 				return QDRService.humanify(input);
 			};
+	  })
+      .filter('shortName', function () {
+			return function (name) {
+				var nameParts = name.split('/')
+				return nameParts.length > 1 ? nameParts[nameParts.length-1] : name;
+			};
 	  });
 /*
 	QDR.module.config(['$locationProvider', function($locationProvider) {
