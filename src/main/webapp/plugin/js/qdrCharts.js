@@ -51,9 +51,10 @@ var QDR = (function (QDR) {
 	        var svgChart = new QDRChartService.AreaChart(chart, $location.path())
 	        svgChart.zoomed = false;
 	        $scope.svgCharts.push(svgChart);
-			// make sure hawtio dashboard charts are saved to localstorage only when the dashboard requests them
-			if ($routeParams.chid && !chart.hdash) {
-				QDRChartService.addHDash(chart);
+
+			// a hawtio dashboard has requested to view this chart. mark the chart so the request to get the data is made
+			if ($routeParams.chid && chart.hdash) {
+				chart.hreq = true;
 			}
 		}
     })
@@ -125,10 +126,15 @@ var QDR = (function (QDR) {
             clearTimeout(updateTimer);
             updateTimer = null;
         }
+		$scope.svgCharts[0].chart.hreq = false;
         for (var i=$scope.svgCharts.length-1; i>=0; --i) {
             delete $scope.svgCharts.splice(i, 1);
         }
     });
+
+	$scope.addHChart = function (chart) {
+        QDRChartService.addHDash(chart.chart);
+	}
 
 	$scope.addToDashboardLink = function (chart) {
 		var href = "#" + $location.path();
@@ -145,10 +151,6 @@ var QDR = (function (QDR) {
 	          "&title=" + encodeURIComponent(title) +
 	          "&size=" + encodeURIComponent(size);
     };
-
-    $scope.$on("$destroy", function( event ) {
-		$scope.svgCharts = [];
-	})
 
     function doDialog(template, chart) {
 
@@ -286,3 +288,5 @@ var QDR = (function (QDR) {
 
 }(QDR || {}));
 
+// "QDRBrouteraddressrouteraddressLqdrouterdeliveriesTransit_0_0"
+// "QDRBrouteraddressrouteraddressLqdrouterdeliveriesTransit_1_0"

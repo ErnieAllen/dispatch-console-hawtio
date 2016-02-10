@@ -2,7 +2,7 @@
     <div ng-show="hasCharts()">
         <div ng-repeat="chart in svgCharts" class="chartContainer ">
             <p class="chartLabels">
-                <button ng-hide="isHDash()" class="hdash-button" title="Add this chart to a dashboard"><a ng-href="{{addToDashboardLink(chart)}}"><i class="icon-share"></i></a></button>
+                <button ng-hide="isHDash()" ng-click="addHChart(chart)" class="hdash-button" title="Add this chart to a dashboard"><a ng-href="{{addToDashboardLink(chart)}}"><i class="icon-share"></i></a></button>
                 <button ng-hide="isHDash()" ng-click="delChart(chart)" title="Delete"><i class="icon-trash"></i></button>
                 <button ng-click="editChart(chart)" title="Configure"><i class="icon-edit"></i></button>
                 <button ng-click="zoomChart(chart)" title="Zoom {{chart.zoomed ? 'in' : 'out'}}" ng-if="!chart.chart.request().nodeList"><i ng-class="chart.zoomed ? 'icon-zoom-in' : 'icon-zoom-out'"></i></button>

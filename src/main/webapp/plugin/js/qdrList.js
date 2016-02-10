@@ -326,6 +326,7 @@ var QDR = (function(QDR) {
 		}
 
 		$scope.isFieldGraphed = function(rowEntity, aggregate) {
+			return false;
 			var dot = !aggregate ? '.' : '';
 			return QDRChartService.isAttrCharted($scope.selectedNodeId, dot + $scope.selectedEntity, $scope.selectedRecordName, rowEntity.name);
 		}
@@ -436,6 +437,29 @@ var QDR = (function(QDR) {
 			$location.path("/dispatch_plugin/charts");
 		};
 
+		$scope.addHChart = function () {
+	        QDRChartService.addHDash($scope.chart);
+			cleanup();
+	        dialog.close(true);
+		}
+
+		$scope.addToDashboardLink = function () {
+			var href = "#/dispatch_plugin/charts";
+			var size = angular.toJson({
+	                size_x: 2,
+	                size_y: 2
+	              });
+
+			var params = angular.toJson({chid: $scope.chart.id()});
+	        var title = "Dispatch Router";
+		    return "/hawtio/#/dashboard/add?tab=dashboard" +
+		          "&href=" + encodeURIComponent(href) +
+		          "&routeParams=" + encodeURIComponent(params) +
+		          "&title=" + encodeURIComponent(title) +
+		          "&size=" + encodeURIComponent(size);
+	    };
+
+
 		$scope.addChartsPage = function () {
 			QDRChartService.addDashboard($scope.chart);
 		};
@@ -472,7 +496,7 @@ var QDR = (function(QDR) {
 				clearTimeout($scope.updateTimer);
 				$scope.updateTimer = null;
 			}
-			if (!$scope.chart.dashboard)
+			if (!$scope.chart.hdash)
 				QDRChartService.unRegisterChart($scope.chart);     // remove the chart
 
 		}

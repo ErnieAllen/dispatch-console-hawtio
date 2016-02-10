@@ -43,12 +43,15 @@ under the License.
             <div id="{{svgDivId}}" class="d3Chart"></div>
     </div>
     <div class="modal-footer">
-        <span ng-hide="isOnChartsPage()">
-            <button class="btn btn-success" type="button" ng-click="addChartsPage()"><i class="icon-bar-chart"></i> Add</button> this chart to the Charts page.
+        <span>
+            <button class="btn btn-success hdash-button" type="button" ng-click="addHChart()" title="Add this chart to a dashboard"><a ng-href="{{addToDashboardLink()}}"><i class="icon-share"></i> Add this chart to a dashboard</a></button>
+            <!--<button class="btn btn-success" type="button" ng-click="addChartsPage()"><i class="icon-bar-chart"></i> Add</button> this chart to the Charts page. -->
         </span>
+<!--
         <span ng-show="isOnChartsPage()">
             <button class="btn btn-danger" type="button" ng-click="delChartsPage()">Remove</button> this chart from the <button class="btn btn-success" type="button" ng-click="showChartsPage()"><i class="icon-bar-chart"></i> Charts</button> page.
         </span>
+-->
         <button class="btn btn-primary" type="button" ng-click="ok()">Close</button>
     </div>
 </script>

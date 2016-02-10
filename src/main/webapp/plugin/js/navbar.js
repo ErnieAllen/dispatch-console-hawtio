@@ -54,12 +54,14 @@ var QDR = (function (QDR) {
         isValid: function (QDRService) { return QDRService.isConnected(); },
         href: "#/dispatch_plugin/list"
       },
+/*
     {
         content: '<i class="icon-bar-chart"></i> Charts',
         title: "View charts",
         isValid: function (QDRService, $location) { return QDRService.isConnected(); },
         href: "#/dispatch_plugin/charts"
     },
+*/
     {
         content: '<i class="icon-align-left"></i> Schema',
         title: "View dispatch schema",

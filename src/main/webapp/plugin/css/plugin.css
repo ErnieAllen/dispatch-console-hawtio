@@ -123,7 +123,6 @@ div.aChart.hDash {
 	padding: 0;
 
 }
-
 div.chartContainer {
     float: left;
 }
@@ -594,11 +593,7 @@ div.modal.dlg-large {
 	width: 53em;
 }
 
-button.hdash-button {
-	padding: 0;
-}
-
 button.hdash-button a {
-	padding: 0 6px;
-	color: #222;
+	text-decoration: none;
+	color: #fff;
 }

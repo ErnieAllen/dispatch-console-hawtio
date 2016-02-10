@@ -67,6 +67,7 @@ var QDR = (function(QDR) {
             this.instance = instance++;
             this.dashboard = false;     // is this chart on the dashboard page
             this.hdash = false;         // is this chart on the hawtio dashboard page
+            this.hreq = false;          // has this hdash chart been requested
             this.type = "value";        // value or rate
             this.rateWindow = 1000;     // calculate the rate of change over this time interval. higher == smother graph
             this.areaColor = "#cbe7f3"; // the chart's area color when not an empty string
@@ -76,7 +77,11 @@ var QDR = (function(QDR) {
 
             // generate a unique id for this chart
             this.id = function () {
-                var key = QDRService.nameFromId(this.request().nodeId) + this.request().entity + this.name() + this.attr() + "_" + this.instance + "_" + (this.request().aggregate ? "1" : "0");
+                var name = this.name()
+                var nameparts = name.split('/');
+                if (nameparts.length == 2)
+                    name = nameparts[1];
+                var key = QDRService.nameFromId(this.request().nodeId) + this.request().entity + name + this.attr() + "_" + this.instance + "_" + (this.request().aggregate ? "1" : "0");
                 // remove all characters except letters,numbers, and _
                 return key.replace(/[^\w]/gi, '')
             }
@@ -154,7 +159,7 @@ var QDR = (function(QDR) {
             }
             this.copy = function () {
                 var chart = self.registerChart(this.nodeId(), this.entity(),
-                            this.name(), this.attr(), this.interval(), true, this.base.request.aggregate);
+                            this.name(), this.attr(), this.interval(), true, this.aggregate(), this.hdash);
                 chart.type = this.type;
                 chart.areaColor = this.areaColor;
                 chart.lineColor = this.lineColor;
@@ -373,8 +378,19 @@ var QDR = (function(QDR) {
                 // Using setTimeout instead of setInterval because the response may take longer than interval
                 request.setTimeoutHandle = setTimeout(self.sendChartRequest, request.interval, request);
             },
+			shouldRequest: function (request) {
+				// see if any of the charts associated with this request have either dialog, dashboard, or hreq
+				return self.charts.some( function (chart) {
+					return (chart.dashboard || chart.hreq) || (!chart.dashboard && !chart.hdash);
+				});
+			},
             // send the request
             sendChartRequest: function (request, once) {
+				if (!once && !self.shouldRequest(request)) {
+	                request.setTimeoutHandle = setTimeout(self.sendChartRequest, request.interval, request)
+					return;
+				}
+
                 // ensure the response has the name field so we can associate the response values with the correct chart
                 var attrs = request.attrs();
                 attrs.push("name");
@@ -382,7 +398,7 @@ var QDR = (function(QDR) {
 	            // this is called when the response is received
 				var saveResponse = function (nodeId, entity, response) {
 	                //QDR.log.debug("got chart results for " + nodeId + " " + entity);
-	                // records an array that has data for all names
+	                // records is an array that has data for all names
 	                var records = response.results;
 	                if (!records)
 	                    return;
@@ -443,13 +459,19 @@ var QDR = (function(QDR) {
             },
 
 			addHDash: function (chart) {
+				chart.hdash = true;
+				self.saveCharts();
+				/*
 				if (!chart.hdash) {
-                var dashChart = self.registerChart(chart.nodeId(), chart.entity(),
+                    var dashChart = self.registerChart(chart.nodeId(), chart.entity(),
                             chart.name(), chart.attr(), chart.interval(), true, chart.aggregate(), true);
-					dashChart.dashboard = false;
-					dashChart.hdash = true;
+					dashChart.dashboard = true;
+					dashChart.hdash = false;
+					chart.dashboard = false;
+					chart.hdash = true;
 					self.saveCharts();
 				}
+				*/
 			},
 			delHDash: function (chart) {
 				chart.hdash = false;
@@ -482,6 +504,10 @@ var QDR = (function(QDR) {
                 var charts = angular.fromJson(localStorage["QDRCharts"]);
                 if (charts) {
                     charts.forEach(function (chart) {
+                        if (chart.instance) {
+                            if (chart.instance >= instance)
+                                instance = chart.instance + 1;
+                        }
                         if (!chart.interval)
                             chart.interval = 1000;
                         if (!chart.duration)
@@ -499,6 +525,7 @@ var QDR = (function(QDR) {
                         var newChart = self.registerChart(chart.nodeId, chart.entity, chart.name, chart.attr, chart.interval, true, chart.aggregate);
                         newChart.dashboard = chart.dashboard;
                         newChart.hdash = chart.hdash;
+                        newChart.hreq = false;
                         newChart.type = chart.type;
                         newChart.rateWindow = chart.rateWindow;
                         newChart.areaColor = chart.areaColor ? chart.areaColor : "#cbe7f3";
