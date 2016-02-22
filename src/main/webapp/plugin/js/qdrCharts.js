@@ -19,18 +19,13 @@ under the License.
 /**
  * @module QDR
  */
-/**
- * @module QDR
- */
 var QDR = (function (QDR) {
 
   /**
    * @method ChartsController
-   * @param $scope
-   * @param QDRServer
-   * @param QDRChartServer
    *
-   * Controller that handles the QDR charts page
+   * Controller that handles displaying a chart on the hawtio dashboard page. Only one chart is displayed per instance of this
+   * page
    */
   QDR.module.controller("QDR.ChartsController", function($scope, QDRService, QDRChartService, $dialog, $location, localStorage, $routeParams) {
 
@@ -45,10 +40,10 @@ var QDR = (function (QDR) {
 
     $scope.svgCharts = [];
     // create an svg object for each chart
-    QDRChartService.charts.forEach(function (chart) {
-		// if we are generating a chart for the hawtio dashboard, just show the chart described in $routeParams
-		if ( (!$routeParams.chid  && chart.dashboard) || ($routeParams.chid && chart.hdash && ($routeParams.chid == chart.id()))) {
-	        var svgChart = new QDRChartService.AreaChart(chart, $location.path())
+    QDRChartService.charts.some(function (chart) {
+		// we are generating a chart for the hawtio dashboard
+		if ( $routeParams.chid == chart.id()) {
+	        var svgChart = new QDRChartService.AreaChart(chart)
 	        svgChart.zoomed = false;
 	        $scope.svgCharts.push(svgChart);
 
@@ -56,28 +51,30 @@ var QDR = (function (QDR) {
 			if ($routeParams.chid && chart.hdash) {
 				chart.hreq = true;
 			}
+			return true;
 		}
     })
 
-    // redraw the charts every second
+    // redraw the chart every update period
+	// this is a $scope function because it is called from the dialog
     var updateCharts = function () {
         $scope.svgCharts.forEach(function (svgChart) {
             svgChart.tick(svgChart.chart.id()); // on this page we are using the chart.id() as the div id in which to render the chart
         })
-		var updateRate = $routeParams.chid ? localStorage['updateRate'] || 5000 : 1000;
+		var updateRate = localStorage['updateRate'] ?  localStorage['updateRate'] : 5000;
+		if (updateTimer) {
+			clearTimeout(updateTimer)
+		}
         updateTimer = setTimeout(updateCharts, updateRate);
     }
 
-	$scope.hDash = function () {
-		return $routeParams.chid ? "hDash" : "";
-	}
-	$scope.isHDash = function () {
-		return $routeParams.chid;
-	}
 	// we are showing a chart for the hawtio dashboard page, but we are not logged in
-	$scope.dashLogin = $routeParams.chid && !QDRService.connected;
-
+	// set this to cause a "need to login" prompt on the dashboard
+	$scope.dashLogin = !QDRService.connected;
+	// the link that the above login prompt will display
 	$scope.loginHref = QDR.pluginName + "/connect";
+
+	// call by ng-init in the html when the page is loaded
 	$scope.chartsLoaded = function () {
         $scope.svgCharts.forEach(function (svgChart) {
             QDRChartService.sendChartRequest(svgChart.chart.request(), true);
@@ -91,16 +88,6 @@ var QDR = (function (QDR) {
 		chart.zoomed = !chart.zoomed;
 		chart.zoom(chart.chart.id(), chart.zoomed);
 	}
-    $scope.showListPage = function () {
-        $location.path("/dispatch_plugin/list");
-    };
-
-    $scope.hasCharts = function () {
-        if ($routeParams.chid)
-            return true;
-        return QDRChartService.numCharts() > 0 || $scope.dashLogin;
-    };
-
     $scope.editChart = function (chart) {
         doDialog("chart-config-template.html", chart.chart);
     };
@@ -118,24 +105,32 @@ var QDR = (function (QDR) {
     // called from dialog when we want to clone the dialog chart
     // the chart argument here is a QDRChartService chart
     $scope.addChart = function (chart) {
-        $scope.svgCharts.push(new QDRChartService.AreaChart(chart, $location.$$path));
+        $scope.svgCharts.push(new QDRChartService.AreaChart(chart));
     };
 
-    $scope.$on("$destroy", function( event ) {
+	$scope.$on("removedFromDashboard", function (event) {
+		QDRChartService.unRegisterChart($scope.svgCharts[0].chart)
+	})
+    $scope.$on("$destroy", function( event) {
         if (updateTimer) {
             clearTimeout(updateTimer);
             updateTimer = null;
         }
-		$scope.svgCharts[0].chart.hreq = false;
-        for (var i=$scope.svgCharts.length-1; i>=0; --i) {
-            delete $scope.svgCharts.splice(i, 1);
-        }
+		if ($scope.svgCharts.length) {
+			//if ($scope.svgCharts[0].chart)
+			//	$scope.svgCharts[0].chart.hreq = false; // stops the chart service from making requests for this chart
+	        for (var i=$scope.svgCharts.length-1; i>=0; --i) {
+	            delete $scope.svgCharts.splice(i, 1);
+	        }
+		}
     });
 
+	// clicked on add to dashboard
 	$scope.addHChart = function (chart) {
         QDRChartService.addHDash(chart.chart);
 	}
 
+	// href that is generated when the page loads
 	$scope.addToDashboardLink = function (chart) {
 		var href = "#" + $location.path();
 		var size = angular.toJson({
@@ -164,8 +159,8 @@ var QDR = (function (QDR) {
 				chart: function() {
 					return chart;
 				},
-				dashboard: function () {
-					return $scope;
+				updateTick: function () {
+					return updateCharts;
 				}
 			}
 	    }).open();
@@ -173,7 +168,8 @@ var QDR = (function (QDR) {
 
   });
 
-  QDR.module.controller("QDR.ChartDialogController", function($scope, QDRChartService, $location, dialog, $rootScope, localStorage, chart, dashboard) {
+	// the edit chart properties dialog
+  QDR.module.controller("QDR.ChartDialogController", function($scope, QDRChartService, $location, dialog, $rootScope, localStorage, chart, updateTick) {
 
 		UI.colors[0] = "#cbe7f3"
 		UI.colors[1] = "#058dc7"
@@ -182,24 +178,43 @@ var QDR = (function (QDR) {
         var dialogSvgChart = null;
         $scope.svgDivId = "dialogChart";    // the div id for the svg chart
 
-		$scope.updateTimer = null;
+		var updateTimer = null;
         $scope.chart = chart;  // the underlying chart object from the dashboard
         $scope.dialogChart = $scope.chart.copy(); // the chart object for this dialog
         $scope.userTitle = $scope.chart.title();
-		$scope.applyText = $scope.chart.hdash ? "Apply" : "Apply to existing chart";
 
         $scope.$watch('userTitle', function(newValue, oldValue) {
             if (newValue !== oldValue) {
                 $scope.dialogChart.title(newValue);
+                dialogSvgChart.tick($scope.svgDivId);
             }
         })
+		$scope.$watch("dialogChart.areaColor", function (newValue, oldValue) {
+			if (newValue !== oldValue) {
+				if (dialogSvgChart)
+                    dialogSvgChart.tick($scope.svgDivId);
+			}
+		})
+		$scope.$watch("dialogChart.lineColor", function (newValue, oldValue) {
+			if (newValue !== oldValue) {
+				if (dialogSvgChart)
+                    dialogSvgChart.tick($scope.svgDivId);
+			}
+		})
+		$scope.$watch("dialogChart.type", function (newValue, oldValue) {
+			if (newValue !== oldValue) {
+				if (dialogSvgChart)
+                    dialogSvgChart.tick($scope.svgDivId);
+			}
+		})
+
         // the stored rateWindow is in milliseconds, but the slider is in seconds
         $scope.rateWindow = $scope.chart.rateWindow / 1000;
 
 		var cleanup = function () {
-			if ($scope.updateTimer) {
-				clearTimeout($scope.updateTimer);
-				$scope.updateTimer = null;
+			if (updateTimer) {
+				clearTimeout(updateTimer);
+				updateTimer = null;
 			}
 			QDRChartService.unRegisterChart($scope.dialogChart);     // remove the chart
 		}
@@ -247,15 +262,8 @@ var QDR = (function (QDR) {
             $scope.chart.title($scope.dialogChart.title());
             $scope.chart.visibleDuration = $scope.dialogChart.visibleDuration;
             QDRChartService.saveCharts();
-        }
-
-        // add a new chart to the dashboard based on the current dialog settings
-        $scope.copyToDashboard = function () {
-            var chart = $scope.dialogChart.copy();
-            // set the new chart's dashboard state
-            QDRChartService.addDashboard(chart);
-            // notify the chart controller that it needs to display a new chart
-            dashboard.addChart(chart);
+			if (typeof updateTick === "function")
+				updateTick();
         }
 
         // update the chart on the popup dialog
@@ -265,8 +273,10 @@ var QDR = (function (QDR) {
                 dialogSvgChart.tick($scope.svgDivId);
 
             // draw the chart again in 1 second
-			var updateRate = chart.hdash ? localStorage['updateRate'] || 5000 : 1000;
-            $scope.updateTimer = setTimeout(updateDialogChart, updateRate);
+			var updateRate = localStorage['updateRate'] ? localStorage['updateRate'] : 5000;
+			if (updateTimer)
+				clearTimeout(updateTimer);
+            updateTimer = setTimeout(updateDialogChart, updateRate);
         }
 
         var showChart = function () {
@@ -276,7 +286,9 @@ var QDR = (function (QDR) {
                 setTimeout(showChart, 100);
                 return;
             }
-            dialogSvgChart = new QDRChartService.AreaChart($scope.dialogChart, $location.$$path);
+            dialogSvgChart = new QDRChartService.AreaChart($scope.dialogChart);
+			if (updateTimer)
+				clearTimeout(updateTimer);
             updateDialogChart();
         }
         showChart();

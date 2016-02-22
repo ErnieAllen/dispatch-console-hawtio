@@ -43,16 +43,16 @@ var QDR = (function (QDR) {
         href: "#/dispatch_plugin/overview"
       },
     {
+        content: '<i class="icon-list "></i> Details',
+        title: "View the attributes of the router nodes",
+        isValid: function (QDRService) { return QDRService.isConnected(); },
+        href: "#/dispatch_plugin/list"
+      },
+    {
         content: '<i class="icon-star-empty"></i> Topology',
         title: "View router network topology",
         isValid: function (QDRService) { return QDRService.isConnected(); },
         href: "#/dispatch_plugin/topology"
-      },
-    {
-        content: '<i class="icon-list "></i> List',
-        title: "View router nodes as a list",
-        isValid: function (QDRService) { return QDRService.isConnected(); },
-        href: "#/dispatch_plugin/list"
       },
 /*
     {

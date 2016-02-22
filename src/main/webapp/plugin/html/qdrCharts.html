@@ -1,21 +1,13 @@
 <div class="main-display row-fluid qdrCharts" ng-controller="QDR.ChartsController">
-    <div ng-show="hasCharts()">
-        <div ng-repeat="chart in svgCharts" class="chartContainer ">
-            <p class="chartLabels">
-                <button ng-hide="isHDash()" ng-click="addHChart(chart)" class="hdash-button" title="Add this chart to a dashboard"><a ng-href="{{addToDashboardLink(chart)}}"><i class="icon-share"></i></a></button>
-                <button ng-hide="isHDash()" ng-click="delChart(chart)" title="Delete"><i class="icon-trash"></i></button>
-                <button ng-click="editChart(chart)" title="Configure"><i class="icon-edit"></i></button>
-                <button ng-click="zoomChart(chart)" title="Zoom {{chart.zoomed ? 'in' : 'out'}}" ng-if="!chart.chart.request().nodeList"><i ng-class="chart.zoomed ? 'icon-zoom-in' : 'icon-zoom-out'"></i></button>
-            </p><div style="clear:both"></div>
-            <div id="{{chart.chart.id()}}" ng-class="hDash()" class="aChart d3Chart"></div>
-        </div>
-        <div ng-init="chartsLoaded()"></div>
+    <div ng-hide="dashLogin" ng-repeat="chart in svgCharts" class="chartContainer ">
+        <p class="chartLabels">
+            <button ng-click="editChart(chart)" title="Configure"><i class="icon-edit"></i></button>
+            <button ng-click="zoomChart(chart)" title="Zoom {{chart.zoomed ? 'in' : 'out'}}" ng-if="!chart.chart.request().nodeList"><i ng-class="chart.zoomed ? 'icon-zoom-in' : 'icon-zoom-out'"></i></button>
+        </p><div style="clear:both"></div>
+        <div id="{{chart.chart.id()}}" class="hDash aChart d3Chart"></div>
     </div>
-    <div ng-hide="hasCharts()" class="centered alert alert-warning">
-        <p>There are no charts. To add charts to this page, click on a <i class="icon-bar-chart"></i> icon on the <button ng-click="showListPage()"><i class="icon-list "></i> List</button> page.</p>
-        <p>Note: Since only numeric vales can be charted, you'll need to display an entity like <strong>Router address</strong> or <strong>Allocator</strong> to see the <i class="icon-bar-chart"></i> chart icons.</p>
-    </div>
-    <div ng-show="{{dashLogin}}" class="centered alert alert-warning">
+    <div ng-init="chartsLoaded()"></div>
+    <div ng-show="dashLogin" class="centered alert alert-warning">
         <p>You need to <a ng-href="{{loginHref}}">login</a> to Dispatch Router before viewing this chart.</p>
     </div>
 </div>
@@ -34,15 +26,15 @@
         <tabset>
             <tab heading="Type">
                 <legend>Chart type</legend>
-                <label><input type="radio" ng-model="dialogChart.type" value="value" ng-change="chartChanged()" /> Value Chart</label>
-                <label><input type="radio" ng-model="dialogChart.type" value="rate" ng-change="chartChanged()" /> Rate Chart</label>
+                <label><input type="radio" ng-model="dialogChart.type" value="value" /> Value Chart</label>
+                <label><input type="radio" ng-model="dialogChart.type" value="rate" /> Rate Chart</label>
                 <div class="dlg-slider" ng-show="dialogChart.type=='rate'">
                     <span>Rate Window: {{rateWindow}} second{{rateWindow > 1 ? "s" : ""}}</span>
                     <div class="slider" ui-slider="slider.options" ng-model="rateWindow"></div>
                 </div>
                 <div style="clear:both;"> </div>
             </tab>
-            <tab heading="Colors">
+            <tab ng-hide="$parent.chart.aggregate()" heading="Colors">
                 <legend>Chart colors</legend>
                 <div class="colorPicker">
                     <div class="colorText">Area ({{dialogChart.areaColor}}):</div><div hawtio-color-picker="dialogChart.areaColor"></div>
@@ -63,8 +55,7 @@
         </tabset>
     </div>
     <div class="modal-footer">
-        <button class="btn btn-success" type="button" ng-click="apply()">{{applyText}}</button>
-        <button ng-hide="chart.hdash" class="btn btn-info" type="button" ng-click="copyToDashboard()">Create new chart</button>
+        <button class="btn btn-success" type="button" ng-click="apply()">Apply</button>
         <button class="btn btn-primary" type="button" ng-click="okClick()">Close</button>
     </div>
 </div>

@@ -16,22 +16,26 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
 -->
-<div class="main-display row-fluid qdrList" ng-controller="QDR.ListController">
-    <ul class="nav nav-tabs qdrListNodes">
-          <li ng-repeat="node in nodes" ng-click="selectNode(node)" ng-class="{active : isNodeSelected(node.id)}"> <span>{{node.name}}</span> </li>
-    </ul>
 
+<div ng-controller="QDR.ListController">
+    <hawtio-pane class="qdr-attributes" position="left" width="200">
+        <div class="treeContainer">
+            <div class="tree-header"><select ng-options="node as node.name for node in nodes" ng-model="currentNode" ng-change="selectNode(currentNode)"></select></div>
+            <div id="entityTree" onSelect="onTreeSelected" onRoot="onRootReady" hideRoot="true"></div>
+            <div ng-init="treeReady()"></div>
+        </div>
+    </hawtio-pane>
     <div class="row-fluid qdrListActions">
-        <ul class="nav nav-tabs ng-scope">
-            <li ng-repeat="entity in entities" ng-class="{active : isActionActive(entity.name)}" ng-click="selectAction(entity.name)" >
-                <a title="{{entity.title}}" data-placement="bottom"> {{entity.name | humanify}} </a></li>
-        </ul>
-            <div id="entityNames" class="gridStyle" ng-grid="gridDef"></div>
-            <div class="selectedItems">
-                <div ng-grid="details"></div>
-            </div>
+        <h4>{{selectedRecordName}}</h4>
+        <div ng-show="currentMode.id === 'attributes'" class="selectedItems">
+            <div ng-grid="details"></div>
+        </div>
+        <div ng-show="currentMode.id === 'operations'">
+            Operations are not implemented yet.
+        </div>
     </div>
 </div>
+
 <!--
     This is the template for the graph dialog that is displayed.
 -->
@@ -45,13 +49,7 @@ under the License.
     <div class="modal-footer">
         <span>
             <button class="btn btn-success hdash-button" type="button" ng-click="addHChart()" title="Add this chart to a dashboard"><a ng-href="{{addToDashboardLink()}}"><i class="icon-share"></i> Add this chart to a dashboard</a></button>
-            <!--<button class="btn btn-success" type="button" ng-click="addChartsPage()"><i class="icon-bar-chart"></i> Add</button> this chart to the Charts page. -->
         </span>
-<!--
-        <span ng-show="isOnChartsPage()">
-            <button class="btn btn-danger" type="button" ng-click="delChartsPage()">Remove</button> this chart from the <button class="btn btn-success" type="button" ng-click="showChartsPage()"><i class="icon-bar-chart"></i> Charts</button> page.
-        </span>
--->
         <button class="btn btn-primary" type="button" ng-click="ok()">Close</button>
     </div>
 </script>

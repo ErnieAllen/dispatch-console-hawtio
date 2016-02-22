@@ -163,7 +163,7 @@ var QDR = (function(QDR) {
     },
     stopUpdating: function () {
         if (angular.isDefined(self.stop)) {
-            QDR.log.info("stoptUpdating called")
+            QDR.log.info("stopUpdating called")
             clearInterval(self.stop);
             self.stop = undefined;
         }

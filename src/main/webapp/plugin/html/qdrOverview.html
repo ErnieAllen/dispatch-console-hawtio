@@ -16,12 +16,22 @@ KIND, either express or implied.  See the License for the
 specific language governing permissions and limitations
 under the License.
 -->
+<!--
 <div ng-controller="QDR.OverviewController">
 
     <div class="treeContainer">
         <div id="overtree"></div>
     </div>
 
+    <div class="treeDetails" ng-include="template.url"></div>
+</div>
+-->
+<div ng-controller="QDR.OverviewController">
+    <hawtio-pane class="qdr-overview" position="left" width="300">
+        <div class="treeContainer">
+            <div id="overtree"></div>
+        </div>
+    </hawtio-pane>
     <div class="treeDetails" ng-include="template.url"></div>
 </div>
 

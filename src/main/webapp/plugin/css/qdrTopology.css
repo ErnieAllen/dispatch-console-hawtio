@@ -178,7 +178,7 @@ text.id {
 
 #topologyForm > div {
   width:396px;
-  height: 100vh;
+  /*height: 100vh;*/
 }
 
 /* globe */

@@ -28,7 +28,6 @@ var QDR = (function (QDR) {
    */
     QDR.module.controller("QDR.TopologyController", ['$scope', '$rootScope', 'QDRService', '$location', '$timeout', '$dialog',
     function($scope, $rootScope, QDRService, $location, $timeout, $dialog) {
-
 		if (!QDRService.connected) {
 			// we are not connected. we probably got here from a bookmark or manual page reload
 			$location.path("/dispatch_plugin/connect")
@@ -36,8 +35,8 @@ var QDR = (function (QDR) {
 			return;
 		}
 
-		QDR.log.debug("started QDR.TopologyController with location.url: " + $location.url());
-		var urlPrefix = window.location.pathname;
+		QDR.log.debug("started QDR.TopologyController with urlPrefix: " + $location.absUrl());
+		var urlPrefix = $location.absUrl();
 
 		$scope.attributes = [];
         $scope.connAttributes = [];
@@ -291,6 +290,7 @@ var QDR = (function (QDR) {
 		var animate = false; // should the force graph organize itself when it is displayed
 		var path, circle;
 		var savedKeys = {};
+		var dblckickPos = [0,0];
 
 	    // set up initial nodes and links
 	    //  - nodes are known by 'id', not by index in array.
@@ -367,9 +367,7 @@ var QDR = (function (QDR) {
                       .style('display', 'block');
                 })
                 .on('click', function (d) {
-					d3.select("#crosssection").style("display","none");
-					d3.select("#crosssection svg").remove();
-
+                    removeCrosssection()
                 });
 
 			// mouse event vars
@@ -393,6 +391,8 @@ var QDR = (function (QDR) {
                 				y: height / 2 + yInit,
                 				fixed: false};
 				}
+				if (position.y > height)
+					position.y = height / 2 - yInit;
 				nodes.push( aNode(id, name, "inter-router", nodeInfo, nodes.length, position.x, position.y, undefined, position.fixed) );
 				yInit *= -1;
 				//QDR.log.debug("adding node " + nodes.length-1);
@@ -430,6 +430,8 @@ var QDR = (function (QDR) {
                                         y: nodes[parent].y + 40 + Math.cos(Math.PI/2 * client),
                                         fixed: false};
                         }
+						if (position.y > height)
+							position.y = nodes[parent].y + 40 + Math.cos(Math.PI/2 * client)
 						//QDR.log.debug("adding node " + nodeIndex);
 						nodes.push(	aNode(id, name, role, nodeInfo, nodes.length, position.x, position.y, j, position.fixed) );
 						// now add a link
@@ -723,6 +725,21 @@ var QDR = (function (QDR) {
             return null;
         }
 
+		function removeCrosssection() {
+			setTimeout(function () {
+				d3.select("[id^=tooltipsy]").remove()
+				$('.hastip').empty();
+			}, 1010);
+			d3.select("#crosssection svg g").transition()
+                .duration(1000)
+				.attr("transform", "translate("+(dblckickPos[0]-140) + "," + (dblckickPos[1]-100) + ") scale(0)")
+                .style("opacity", 0)
+                .each("end", function (d) {
+                    d3.select("#crosssection svg").remove();
+                    d3.select("#crosssection").style("display","none");
+                });
+		}
+
 	    // takes the nodes and links array of objects and adds svg elements for everything that hasn't already
 	    // been added
 	    function restart(start) {
@@ -822,23 +839,25 @@ var QDR = (function (QDR) {
                       .style('top', (mouseY + $(document).scrollTop()) + "px")
                       .style('display', 'block');
                 })
-                .on("dblclick", function (d) {
-                    var pos = d3.mouse(this);
+                .on("click", function (d) {
+                    dblckickPos = d3.mouse(this);
+                    d3.event.stopPropagation();
+
                     var diameter = 400;
                     var format = d3.format(",d");
                     var pack = d3.layout.pack()
                         .size([diameter - 4, diameter - 4])
-                        .padding(3)
+                        .padding(-10)
                         .value(function(d) { return d.size; });
 
                     var svg = d3.select("#crosssection").append("svg")
                         .attr("width", diameter)
-                        .attr("height", diameter);
+                        .attr("height", diameter)
                     var svgg = svg.append("g")
                         .attr("transform", "translate(2,2)");
 
 					svg.on('click', function (d) {
-		                d3.select("#crosssection").style("display","none");
+						removeCrosssection();
 					})
 
 					var root = {
@@ -879,7 +898,7 @@ var QDR = (function (QDR) {
 	                      .data(pack.nodes)
 	                    .enter().append("g")
 	                      .attr("class", function(d) { return d.children ? "parent node hastip" : "leaf node hastip"; })
-	                      .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; })
+	                      .attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")" + (!d.children ? "scale(0.9)" : ""); })
 	                      .attr("title", function (d) {
 	                          var title = "<h4>" + d.desc + "</h4><table class='tiptable'><tbody>";
 	                          if (d.attributeNames)
@@ -904,7 +923,10 @@ var QDR = (function (QDR) {
 	                      });
 
 					$('.hastip').tooltipsy({ alignTo: 'cursor'});
+					svgg.attr("transform", "translate("+(dblckickPos[0]-140) + "," + (dblckickPos[1]-100) + ") scale(0.01)")
 	                d3.select("#crosssection").style("display","block");
+
+					svgg.transition().attr("transform", "translate(2,2) scale(1)")
                 })
 
 

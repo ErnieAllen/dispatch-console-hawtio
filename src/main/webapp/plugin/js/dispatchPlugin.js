@@ -131,9 +131,7 @@ var QDR = (function(QDR) {
 		Core.addCSS(QDR.contextPath + "plugin/css/dispatch.css");
 		Core.addCSS(QDR.contextPath + "plugin/css/qdrTopology.css");
 		Core.addCSS(QDR.contextPath + "plugin/css/plugin.css");
-		Core.addCSS(QDR.contextPath + "plugin/css/json-formatter-min.css");
-		Core.addCSS(QDR.contextPath + "plugin/css/fancytree.css");
-		//Core.addCSS("https://cdnjs.cloudflare.com/ajax/libs/jquery.fancytree/2.15.0/skin-win8/ui.fancytree.css");
+		Core.addCSS("https://cdn.rawgit.com/mohsen1/json-formatter/master/dist/json-formatter.min.css");
 		Core.addCSS("https://cdnjs.cloudflare.com/ajax/libs/jquery.tipsy/1.0.2/jquery.tipsy.css");
 		Core.addCSS("https://code.jquery.com/ui/1.8.24/themes/base/jquery-ui.css");
 
@@ -220,19 +218,24 @@ var QDR = (function(QDR) {
 })(QDR || {});
 
 
-//'jsonFormatter', 'ui.bootstrap', 'ui.slider'
-
 // tell the hawtio plugin loader about our plugin so it can be
 // bootstrapped with the rest of angular
 hawtioPluginLoader.addModule(QDR.pluginName);
-hawtioPluginLoader.addModule('jsonFormatter');
 
-hawtioPluginLoader.addModule('ui.slider');
+$.getScript('https://cdn.rawgit.com/angular-ui/ui-slider/master/src/slider.js', function() {
+	hawtioPluginLoader.addModule('ui.slider');
+});
+$.getScript('https://cdn.rawgit.com/mohsen1/json-formatter/master/dist/json-formatter.min.js', function() {
+	hawtioPluginLoader.addModule('jsonFormatter');
+});
 
 // force an more modern version of d3 to load
 $.getScript('https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.14/d3.min.js', function() {});
-// hawtio uses the deprecated dynatree. this has been updated to fancytree
-$.getScript('https://cdnjs.cloudflare.com/ajax/libs/jquery.fancytree/2.15.0/jquery.fancytree.js', function() {});
+// tooltips on the list page
+$.getScript('https://cdn.rawgit.com/jaz303/tipsy/master/src/javascripts/jquery.tipsy.js', function() {});
+// tooltips on the topology page
+$.getScript('https://cdn.rawgit.com/briancray/tooltipsy/master/tooltipsy.min.js', function() {});
+
 
 
 
