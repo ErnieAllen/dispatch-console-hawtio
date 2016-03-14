@@ -44,7 +44,31 @@ var QDR = (function (QDR) {
 			$location.path("/dispatch_plugin/connect")
 			return;
 		}
-
+		// we want attributes to be listed first, so add it at index 0
+		$scope.subLevelTabs = [{
+		    content: '<i class="icon-list"></i> Attributes',
+		    title: "View the attribute values on your selection",
+		    isValid: function (workspace) { return true; },
+		    href: function () { return "#/dispatch-plugin/attributes"; },
+		    index: 0
+		},
+		{
+		    content: '<i class="icon-leaf"></i> Operations',
+		    title: "Execute operations on your selection",
+		    isValid: function (workspace) { return true; },
+		    href: function () { return "#/dispatch-plugin/operations"; },
+		    index: 1
+		}]
+		$scope.activeTab = $scope.subLevelTabs[0];
+		$scope.setActive = function (nav) {
+			$scope.activeTab = nav;
+		}
+		$scope.isValid = function (nav) {
+			return nav.isValid()
+		}
+		$scope.isActive = function (nav) {
+			return nav == $scope.activeTab;
+		}
 		var nodeIds = QDRService.nodeIdList();
 		var currentTimer;
 		var refreshInterval = 5000

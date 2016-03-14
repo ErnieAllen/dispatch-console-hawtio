@@ -143,7 +143,7 @@ var QDR = (function(QDR) {
         // called by receiver's on('message') handler when a response arrives
         resolve: function(context) {
 			var correlationID = context.message.properties.correlation_id;
-            this._objects[correlationID].resolver(context.message.body);
+            this._objects[correlationID].resolver(context.message.body, context);
             delete this._objects[correlationID];
         }
     },
@@ -246,6 +246,10 @@ var QDR = (function(QDR) {
           }
           return null;
       },
+
+		isArtemis: function (d) {
+			return d.nodeType ==='on-demand' && !d.properties.product;
+		},
 
       /*
        * send the management messages that build up the topology
@@ -564,13 +568,73 @@ The response looks like:
         }, ret.error);
       },
 
-    sendQuery: function(toAddr, entity, attrs) {
+      getNodeInfo: function (nodeName, entity, attrs, callback) {
+        //QDR.log.debug("getNodeInfo called with nodeName: " + nodeName + " and entity " + entity);
+        var ret;
+        self.correlator.request(
+            ret = self.sendQuery(nodeName, entity, attrs)
+        ).then(ret.id, function(response) {
+            callback(nodeName, entity, response);
+            //self.topology.addNodeInfo(nodeName, entity, response);
+            //self.topology.cleanUp(response);
+        }, ret.error);
+      },
+
+	sendMethod: function (nodeId, entity, attrs, operation, callback) {
+		var ret;
+		self.correlator.request(
+			ret = self._sendMethod(nodeId, entity, attrs, operation)
+		).then(ret.id, function (response, context) {
+				callback(nodeId, entity, response, context);
+		}, ret.error);
+	},
+
+	_fullAddr: function (toAddr) {
         var toAddrParts = toAddr.split('/');
         if (toAddrParts.shift() != "amqp:") {
             self.topology.error(Error("unexpected format for router address: " + toAddr));
             return;
         }
         var fullAddr =  self.toAddress + "/" + toAddrParts.join('/');
+		return fullAddr;
+	},
+
+	_sendMethod: function (toAddr, entity, attrs, operation) {
+		var fullAddr = self._fullAddr(toAddr);
+		var ret = {id: self.correlator.corr()};
+		if (!self.sender || !self.sendable) {
+			ret.error = "no sender"
+			return ret;
+		}
+		try {
+			var application_properties = {
+				operation:  operation
+			}
+			if (attrs.type)
+				application_properties.type = attrs.type;
+			if (attrs.name)
+				application_properties.name = attrs.name;
+	        self.sender.send({
+	                body: attrs,
+	                properties: {
+	                    to:                     fullAddr,
+                        reply_to:               self.receiver.remote.attach.source.address,
+	                    correlation_id:         ret.id
+	                },
+	                application_properties: application_properties
+            })
+		}
+		catch (e) {
+			error = "error sending: " + e;
+			QDR.log.error(error)
+			ret.error = error;
+		}
+		return ret;
+	},
+
+    sendQuery: function(toAddr, entity, attrs, operation) {
+        operation = operation || "QUERY"
+		var fullAddr = self._fullAddr(toAddr);
 
 		var body;
         if (attrs)
@@ -582,7 +646,7 @@ The response looks like:
                 "attributeNames": [],
             }
 
-		return self._send(body, fullAddr, "QUERY", "org.apache.qpid.dispatch" + entity);
+		return self._send(body, fullAddr, operation, "org.apache.qpid.dispatch" + entity);
     },
 
     sendMgmtQuery: function (operation) {
@@ -662,7 +726,7 @@ The response looks like:
 				}
 			}
 			var onDisconnect = function () {
-				QDR.log.warn("Disconnected");
+				//QDR.log.warn("Disconnected");
 				stop();
 				self.executeDisconnectActions();
 			}

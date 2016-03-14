@@ -107,7 +107,15 @@ var QDR = (function(QDR) {
 				var nameParts = name.split('/')
 				return nameParts.length > 1 ? nameParts[nameParts.length-1] : name;
 			};
-	  });
+	  })
+	  .filter('Pascalcase', function () {
+	        return function (str) {
+				if (!str)
+					return "";
+	            return str.replace(/(\w)(\w*)/g,
+                        function(g0,g1,g2){return g1.toUpperCase() + g2.toLowerCase();});
+	        }
+	  })
 /*
 	QDR.module.config(['$locationProvider', function($locationProvider) {
         $locationProvider.html5Mode(true);
@@ -134,6 +142,7 @@ var QDR = (function(QDR) {
 		Core.addCSS("https://cdn.rawgit.com/mohsen1/json-formatter/master/dist/json-formatter.min.css");
 		Core.addCSS("https://cdnjs.cloudflare.com/ajax/libs/jquery.tipsy/1.0.2/jquery.tipsy.css");
 		Core.addCSS("https://code.jquery.com/ui/1.8.24/themes/base/jquery-ui.css");
+		Core.addCSS("https://maxcdn.bootstrapcdn.com/font-awesome/4.5.0/css/font-awesome.min.css");
 
 		// tell hawtio that we have our own custom layout for
 		// our view

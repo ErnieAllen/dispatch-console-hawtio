@@ -17,19 +17,18 @@ specific language governing permissions and limitations
 under the License.
 -->
 <div class="qdrTopology row-fluid" ng-controller="QDR.TopologyController">
-    <div class="tertiary left panel">
+    <div class="qdr-topology pane left" ng-controller="QDR.TopologyFormController">
         <div id="topologyForm" ng-class="{selected : isSelected()}">
             <!-- <div ng-repeat="form in forms" ng-show="isVisible(form)" ng-class='{selected : isSelected(form)}'> -->
-
-            <div ng-show="isGeneral()">
+            <div ng-show="form == 'router'">
                 <h4>Router Info</h4>
                 <div class="gridStyle" ng-grid="topoGridOptions"></div>
             </div>
-            <div ng-show="isConnections()">
+            <div ng-show="form == 'connection'">
                 <h4>Connection Info</h4>
-                <div class="gridStyle" ng-grid="topoConnOptions"></div>
+                <div class="gridStyle" ng-grid="topoGridOptions"></div>
             </div>
-            <div id="addNodeForm" ng-show="isAddNode()">
+            <div id="addNodeForm" ng-show="form == 'add'">
                 <h4>Add a new router</h4>
                 <ul>
                     <li>Click on an existing router to create a connection to the new router</li>
@@ -71,7 +70,37 @@ under the License.
                 <li ng-click="removeLink()">Remove connection</li>
             </ul>
         </div>
-
+        <div id="svg_legend">
+            <svg>
+                <g transform="translate(30,30)">
+                    <circle class="node inter-router" r="25"></circle>
+                    <text x="55" y="8" class="id">Router</text>
+                    <title>Qpid Dispatch Router</title></g>
+                <g transform="translate(30,84)">
+                    <circle class="node normal console" r="15"></circle>
+                    <text x="0" y="6" class="id console normal">&#xf108;</text>
+                    <text x="84" y="6" class="id">Dispatch console</text>
+                    <title>Dispatch console</title></g>
+                <g transform="translate(30, 130)">
+                    <circle class="node normal" r="15"></circle>
+                    <text x="0" y="6" class="id normal">&#xf109;</text>
+                    <text x="52" y="6" class="id">Client</text>
+                    <title>client</title></g>
+                <g transform="translate(30, 175)">
+                    <circle class="node on-demand" r="15"></circle>
+                    <text x="0" y="6" class="id on-demand">&#xf1c0;</text>
+                    <text x="56" y="6" class="id">Broker</text>
+                    <title>Broker</title></g>
+                <g transform="translate(30, 220)">
+                    <circle class="node on-demand artemis" r="15"></circle>
+                    <text x="0" y="12" class="id on-demand artemis">&#xf170;</text>
+                    <text x="80" y="6" class="id">Artemis Broker</text>
+                    <title>Artemis broker</title></g>
+            </svg>
+        </div>
+        <div id="multiple_details">
+            <div class="gridStyle" ng-grid="multiDetails"></div>
+        </div>
     </div>
 </div>
 <!--

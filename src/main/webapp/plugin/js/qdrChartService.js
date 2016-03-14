@@ -190,16 +190,16 @@ var QDR = (function(QDR) {
 
         // Object that represents the management request to fetch and store data for multiple charts
         function ChartRequest(opts) { //nodeId, entity, name, attr, interval, aggregate) {
-            this.duration = 10;         // number of minutes to keep the data
-            this.nodeId = opts.nodeId;       // eg amqp:/_topo/0/QDR.A/$management
-            this.entity = opts.entity;       // eg .router.address
+            this.duration = opts.duration || 10;    // number of minutes to keep the data
+            this.nodeId = opts.nodeId;              // eg amqp:/_topo/0/QDR.A/$management
+            this.entity = opts.entity;              // eg .router.address
 			// sorted since the responses will always be sorted
-			this.aggregate = opts.aggregate;   // list of nodeIds for aggregate charts
-            this.datum = {};            // object containing array of arrays for each attr
-                                        // like {attr1: [[date,value],[date,value]...], attr2: [[date,value]...]}
+			this.aggregate = opts.aggregate;        // list of nodeIds for aggregate charts
+            this.datum = {};                        // object containing array of arrays for each attr
+                                                    // like {attr1: [[date,value],[date,value]...], attr2: [[date,value]...]}
 
-            this.interval = opts.interval;   // number of milliseconds between updates to data
-            this.setTimeoutHandle = null;   // used to cancel the next request
+            this.interval = opts.interval || 1000;  // number of milliseconds between updates to data
+            this.setTimeoutHandle = null;           // used to cancel the next request
             // copy the savable properties to an object
 
 			this.data = function (name, attr) {
@@ -527,8 +527,6 @@ var QDR = (function(QDR) {
                         }
                         if (chart.instance >= instance)
                             instance = chart.instance + 1;
-                        if (!chart.interval)
-                            chart.interval = 1000;
                         if (!chart.duration)
                             chart.duration = 10;
                         if (chart.nodeList)
