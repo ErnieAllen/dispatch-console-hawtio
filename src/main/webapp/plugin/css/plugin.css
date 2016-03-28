@@ -807,7 +807,19 @@ text.console, text.on-demand, text.normal {
 	font-size: 16px;
 }
 
-text.artemis {
-	fill: #700;
-	font-size: 34px;
+@font-face {
+    font-family:"Brokers";
+    src: url("brokers.ttf") /* TTF file for CSS3 browsers */
+}
+
+text.artemis.on-demand {
+    font-family: Brokers;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+text.qpid-cpp.on-demand {
+    font-family: Brokers;
+    font-size: 18px;
+    font-weight: bold;
 }
