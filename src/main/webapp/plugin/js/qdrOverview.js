@@ -165,7 +165,28 @@ var QDR = (function (QDR) {
 				if (expected == received) {
 					allRouterFields.sort ( function (a,b) { return a.routerId < b.routerId ? -1 : a.routerId > b.routerId ? 1 : 0})
 					// now get each router's node info
-					QDRService.getMultipleNodeInfo(nodeIds, "router", [], function (nodeIds, entity, response) {
+					QDRService.getMultipleNodeInfo(nodeIds, "router", [], function (nodeIds, entity, responses) {
+						for(var r in responses) {
+							var result = responses[r]
+							var routerId = QDRService.valFor(result.attributeNames, result.results[0], "routerId")
+							allRouterFields.some( function (connField) {
+								if (routerId === connField.routerId) {
+									result.attributeNames.forEach ( function (attrName) {
+										connField[attrName] = QDRService.valFor(result.attributeNames, result.results[0], attrName)
+									})
+									return true
+								}
+								return false
+							})
+						}
+						$scope.allRouterFields = allRouterFields
+						$scope.$apply()
+						if (currentTimer) {
+							clearTimeout(currentTimer)
+						}
+						currentTimer = setTimeout(allRouterInfo, refreshInterval);
+/*
+
 						var results = response.aggregates
 						results.forEach ( function (result) {
 
@@ -186,10 +207,11 @@ var QDR = (function (QDR) {
 							clearTimeout(currentTimer)
 						}
 						currentTimer = setTimeout(allRouterInfo, refreshInterval);
-					}, nodeIds[0])
+*/
+					}, nodeIds[0], false)
 				}
 			}
-			nodeIds.forEach ( function (nodeId) {
+			nodeIds.forEach ( function (nodeId, i) {
 				QDRService.getNodeInfo(nodeId, ".connection", ["role"], gotNodeInfo)
 			})
 
