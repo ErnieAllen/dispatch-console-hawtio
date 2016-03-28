@@ -251,6 +251,10 @@ var QDR = (function(QDR) {
 			return d.nodeType ==='on-demand' && !d.properties.product;
 		},
 
+		isQpid: function (d) {
+			return d.nodeType ==='on-demand' && (d.properties && d.properties.product === 'qpid-cpp');
+		},
+
       /*
        * send the management messages that build up the topology
        *
@@ -486,66 +490,19 @@ The response looks like:
         }, ret.error);
       },
 
-		getMultipleNodeInfo: function (nodeNames, entity, attrs, callback, selectedNodeId) {
+		getMultipleNodeInfo: function (nodeNames, entity, attrs, callback, selectedNodeId, aggregate) {
+			if (!angular.isDefined(aggregate))
+				aggregate = true;
 			var responses = {};
 			var gotNodesResult = function (nodeName, dotentity, response) {
 				responses[nodeName] = response;
 				if (Object.keys(responses).length == nodeNames.length) {
-					aggregateNodeInfo(nodeNames, entity, responses, callback);
+					if (aggregate)
+						self.aggregateNodeInfo(nodeNames, entity, selectedNodeId, responses, callback);
+					else {
+						callback(nodeNames, entity, responses)
+					}
 				}
-			}
-
-			var aggregateNodeInfo = function (nodeNames, entity, responses, callback) {
-				//QDR.log.debug("got all results for  " + entity);
-				// aggregate the responses
-				var newResponse = {};
-				var thisNode = responses[selectedNodeId];
-				newResponse['attributeNames'] = thisNode.attributeNames;
-				newResponse['results'] = thisNode.results;
-				newResponse['aggregates'] = [];
-				for (var i=0; i<thisNode.results.length; ++i) {
-					var result = thisNode.results[i];
-					var vals = [];
-					result.forEach( function (val) {
-						vals.push({sum: val, detail: []})
-					})
-					newResponse.aggregates.push(vals);
-				}
-				var nameIndex = thisNode.attributeNames.indexOf("name");
-				var ent = self.schema.entityTypes[entity];
-				var ids = Object.keys(responses);
-				ids.sort();
-				ids.forEach( function (id) {
-					var response = responses[id];
-					var results = response.results;
-					results.forEach( function (result) {
-						// find the matching result in the aggregates
-						var found = newResponse.aggregates.some( function (aggregate, j) {
-							if (aggregate[nameIndex].sum === result[nameIndex]) {
-								// result and aggregate are now the same record, add the graphable values
-								newResponse.attributeNames.forEach( function (key, i) {
-									if (ent.attributes[key] && ent.attributes[key].graph) {
-										if (id != selectedNodeId)
-											aggregate[i].sum += result[i];
-										aggregate[i].detail.push({node: self.nameFromId(id)+':', val: result[i]})
-									}
-								})
-								return true; // stop looping
-							}
-							return false; // continute looking for the aggregate record
-						})
-						if (!found) {
-							// this attribute was not found in the aggregates yet
-							// because it was not in the selectedNodeId's results
-							var vals = [];
-							result.forEach( function (val) {
-								vals.push({sum: val, detail: []})
-							})
-							newResponse.aggregates.push(vals)
-						}
-					})
-				})
-				callback(nodeNames, entity, newResponse);
 			}
 
 			nodeNames.forEach( function (id) {
@@ -553,6 +510,60 @@ The response looks like:
 	        })
 			//TODO: implement a timeout in case not all requests complete
 		},
+
+		aggregateNodeInfo: function (nodeNames, entity, selectedNodeId, responses, callback) {
+			//QDR.log.debug("got all results for  " + entity);
+			// aggregate the responses
+			var newResponse = {};
+			var thisNode = responses[selectedNodeId];
+			newResponse['attributeNames'] = thisNode.attributeNames;
+			newResponse['results'] = thisNode.results;
+			newResponse['aggregates'] = [];
+			for (var i=0; i<thisNode.results.length; ++i) {
+				var result = thisNode.results[i];
+				var vals = [];
+				result.forEach( function (val) {
+					vals.push({sum: val, detail: []})
+				})
+				newResponse.aggregates.push(vals);
+			}
+			var nameIndex = thisNode.attributeNames.indexOf("name");
+			var ent = self.schema.entityTypes[entity];
+			var ids = Object.keys(responses);
+			ids.sort();
+			ids.forEach( function (id) {
+				var response = responses[id];
+				var results = response.results;
+				results.forEach( function (result) {
+					// find the matching result in the aggregates
+					var found = newResponse.aggregates.some( function (aggregate, j) {
+						if (aggregate[nameIndex].sum === result[nameIndex]) {
+							// result and aggregate are now the same record, add the graphable values
+							newResponse.attributeNames.forEach( function (key, i) {
+								if (ent.attributes[key] && ent.attributes[key].graph) {
+									if (id != selectedNodeId)
+										aggregate[i].sum += result[i];
+									aggregate[i].detail.push({node: self.nameFromId(id)+':', val: result[i]})
+								}
+							})
+							return true; // stop looping
+						}
+						return false; // continute looking for the aggregate record
+					})
+					if (!found) {
+						// this attribute was not found in the aggregates yet
+						// because it was not in the selectedNodeId's results
+						var vals = [];
+						result.forEach( function (val) {
+							vals.push({sum: val, detail: []})
+						})
+						newResponse.aggregates.push(vals)
+					}
+				})
+			})
+			callback(nodeNames, entity, newResponse);
+		},
+
 
       getSchema: function () {
         //QDR.log.debug("getting schema");
@@ -595,7 +606,8 @@ The response looks like:
             self.topology.error(Error("unexpected format for router address: " + toAddr));
             return;
         }
-        var fullAddr =  self.toAddress + "/" + toAddrParts.join('/');
+        //var fullAddr =  self.toAddress + "/" + toAddrParts.join('/');
+        var fullAddr =  toAddrParts.join('/');
 		return fullAddr;
 	},
 
@@ -645,13 +657,13 @@ The response looks like:
             body = {
                 "attributeNames": [],
             }
-
-		return self._send(body, fullAddr, operation, "org.apache.qpid.dispatch" + entity);
+		var ent = entity.split('.')
+		return self._send(body, fullAddr, operation, ent[1]);
+		//return self._send(body, fullAddr, operation, "org.apache.qpid.dispatch" + entity);
     },
 
     sendMgmtQuery: function (operation) {
-		// TODO: file bug against dispatch - We should be able to just pass body: [], but that generates an 'invalid body'
-		return self._send([' '], self.toAddress + "/$management", operation);
+		return self._send([], "/$management", operation);
     },
 
 	_send: function (body, to, operation, entityType) {
@@ -678,6 +690,17 @@ The response looks like:
 	                },
 	                application_properties: application_properties
             })
+/*
+            console.dump({
+                         	                body: body,
+                         	                properties: {
+                         	                    to:                     to,
+                                                 reply_to:               self.receiver.remote.attach.source.address,
+                         	                    correlation_id:         ret.id
+                         	                },
+                         	                application_properties: application_properties
+                                     })
+*/
 		}
 		catch (e) {
 			error = "error sending: " + e;
@@ -713,7 +736,6 @@ The response looks like:
 				self.receiver = null;
 				self.sendable = false;
 			}
-
 			var maybeStart = function () {
 				if (okay.connection && okay.sender && okay.receiver && self.sendable && !self.connected) {
 					QDR.log.info("okay to start")
@@ -754,7 +776,7 @@ The response looks like:
 				self.errorText = "Disconnected"
 			})
 
-			var sender = connection.open_sender("/$management");
+			var sender = connection.open_sender();
 			sender.on('sender_open', function (context) {
 				QDR.log.debug("sender_opened")
 				okay.sender = true
@@ -788,7 +810,7 @@ The response looks like:
 (function() {
     console.dump = function(object) {
         if (window.JSON && window.JSON.stringify)
-            console.log(JSON.stringify(object));
+            console.log(JSON.stringify(object,undefined,2));
         else
             console.log(object);
     };
