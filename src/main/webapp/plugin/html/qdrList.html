@@ -53,7 +53,7 @@ under the License.
                         <span ng-if="attribute.type == 'disabled'" >{{getAttributeValue(attribute)}}</span>
                     </div>
                     <div ng-if="attribute.input == 'select'">
-                        <select id="{{attribute.name}}" ng-model="attribute.selected" ng-options="item for item in attribute.rawtype"></select>
+                        <select id="{{attribute.name}}" ng-model="attribute.selected" ng-options="item for item in attribute.rawtype track by item"></select>
                     </div>
                     <div ng-if="attribute.input == 'boolean'" class="boolean">
                         <label><input type="radio" ng-model="attribute.rawValue" ng-value="true"> True</label>

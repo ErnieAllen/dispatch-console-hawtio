@@ -269,7 +269,7 @@ var QDR = (function(QDR) {
 			}
 		}
 
-		var schemaProps = function (entityName, key) {
+		var schemaProps = function (entityName, key, currentNode) {
 	   		var typeMap = {integer: 'number', string: 'text', path: 'text', boolean: 'boolean'};
 
 			var entity = QDRService.schema.entityTypes[entityName]
@@ -283,6 +283,19 @@ var QDR = (function(QDR) {
 			// special cases
 			if (entityName == 'log' && key == 'module') {
 				return {input: 'input', type: 'disabled', required: false, selected: "", rawtype: 'string', disabled: true, 'default': ''}
+			}
+			if (entityName === 'linkRoutePattern' && key === 'connector') {
+				// turn input into a select. the values will be populated later
+				value.type = []
+				// find all the connector names and populate the select
+				QDRService.getNodeInfo(currentNode.id, '.connector', ['name'], function (nodeName, dotentity, response) {
+					$scope.detailFields.some( function (field) {
+						if (field.name === 'connector') {
+							field.rawtype = response.results.map (function (result) {return result[0]})
+							return true;
+						}
+					})
+				});
 			}
 			return {    name:       key,
 						humanName:  QDRService.humanify(key),
@@ -299,7 +312,6 @@ var QDR = (function(QDR) {
                         disabled:   disabled
             };
 		}
-
 		$scope.getAttributeValue = function (attribute) {
 			var value = attribute.attributeValue;
 			if ($scope.currentMode.op === "CREATE" && attribute.name === 'identity')
@@ -314,7 +326,7 @@ var QDR = (function(QDR) {
 				var changed = $scope.detailFields.filter(function (old) {
 					return (old.name === attr) ? old.graph && old.rawValue != row[attr].value : false;
 				})
-				var schemaEntity = schemaProps($scope.selectedEntity, attr)
+				var schemaEntity = schemaProps($scope.selectedEntity, attr, $scope.currentNode)
 				details.push( {
 					attributeName:  QDRService.humanify(attr),
 					attributeValue: attr === 'port' ? row[attr].value : QDRService.pretty(row[attr].value),
